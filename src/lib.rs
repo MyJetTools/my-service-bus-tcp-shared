@@ -14,5 +14,5 @@ mod tcp_contracts;
 pub use connection_attrs::ConnectionAttributes;
 pub use error::ReadingTcpContractFail;
 pub use packet_versions::PacketVersions;
-pub use socket_reader::TSocketReader;
+pub use socket_reader::{SocketReader, TSocketReader};
 pub use tcp_contracts::{PacketProtVer, TcpContract, TcpContractMessage};
