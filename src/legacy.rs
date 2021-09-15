@@ -1,6 +1,6 @@
 use super::{
-    common_serializers::*, tcp_contracts::ConnectionAttributes, tcp_contracts::RequestId,
-    ReadingTcpContractFail, TSocketReader,
+    common_serializers::*, tcp_contracts::RequestId, ConnectionAttributes, ReadingTcpContractFail,
+    TSocketReader,
 };
 
 pub async fn read_long<T: TSocketReader>(

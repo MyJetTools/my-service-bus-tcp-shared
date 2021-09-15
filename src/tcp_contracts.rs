@@ -1,8 +1,8 @@
 use my_service_bus_shared::{queue_with_intervals::QueueIndexRange, MessageId, TopicQueueType};
 
-use super::{
-    common_serializers::*, tcp_message_id::*, PacketVersions, ReadingTcpContractFail, TSocketReader,
-};
+use crate::ConnectionAttributes;
+
+use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
 
 use std::collections::HashMap;
 
@@ -84,20 +84,6 @@ pub enum TcpContract {
         confirmation_id: ConfirmationId,
         delivered: Vec<QueueIndexRange>,
     },
-}
-
-pub struct ConnectionAttributes {
-    pub versions: PacketVersions,
-    pub protocol_version: i32,
-}
-
-impl ConnectionAttributes {
-    pub fn new() -> Self {
-        Self {
-            versions: PacketVersions::new(),
-            protocol_version: 0,
-        }
-    }
 }
 
 impl TcpContract {
