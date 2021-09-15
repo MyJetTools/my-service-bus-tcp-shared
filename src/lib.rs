@@ -1,6 +1,8 @@
 pub mod common_deserializers;
 pub mod common_serializers;
 pub mod deserializers;
+pub mod tcp_contract_to_string;
+pub mod tcp_message_id;
 
 mod my_sb_socket_error;
 mod packet_versions;

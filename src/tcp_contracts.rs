@@ -1,29 +1,14 @@
 use my_service_bus_shared::{queue_with_intervals::QueueIndexRange, MessageId, TopicQueueType};
 
-use super::{common_serializers::*, MySbSocketError, PacketVersions, TSocketReader};
+use super::{
+    common_serializers::*, tcp_message_id::*, MySbSocketError, PacketVersions, TSocketReader,
+};
 
 use std::collections::HashMap;
 
 pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
-
-const PING: u8 = 0;
-const PONG: u8 = 1;
-const GREETING: u8 = 2;
-const PUBLISH: u8 = 3;
-const PUBLISH_RESPONSE: u8 = 4;
-const SUBSCRIBE: u8 = 5;
-const SUBSCRIBE_RESPONSE: u8 = 6;
-pub const NEW_MESSAGE: u8 = 7;
-const ALL_MESSAGES_DELIVERED_CONFIRMATION: u8 = 8;
-const CREATE_TOPIC_IF_NOT_EXISTS: u8 = 9;
-//Not Supported const MESSAGES_DELIVERED_AND_NOT_DELIVERED_CONFIRMATION: u8 = 10;
-const PACKET_VERSIONS: u8 = 11;
-const REJECT: u8 = 12;
-const ALL_MESSAGES_NOT_DELIVERED_CONFIRMATION: u8 = 13;
-const CONFIRM_SOME_MESSAGES_AS_OK: u8 = 14;
-const CONFIRM_MESSAGES_BY_NOT_DELIVERY: u8 = 15;
 
 #[derive(Debug)]
 pub struct PacketProtVer {
