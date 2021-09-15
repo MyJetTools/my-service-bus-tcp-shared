@@ -5,16 +5,16 @@ use tokio::{
     net::TcpStream,
 };
 
-use super::MySbSocketError;
+use super::ReadingTcpContractFail;
 
 #[async_trait]
 pub trait TSocketReader {
-    async fn read_byte(&mut self) -> Result<u8, MySbSocketError>;
-    async fn read_i32(&mut self) -> Result<i32, MySbSocketError>;
-    async fn read_bool(&mut self) -> Result<bool, MySbSocketError>;
-    async fn read_byte_array(&mut self) -> Result<Vec<u8>, MySbSocketError>;
-    async fn read_i64(&mut self) -> Result<i64, MySbSocketError>;
-    async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), MySbSocketError>;
+    async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail>;
+    async fn read_i32(&mut self) -> Result<i32, ReadingTcpContractFail>;
+    async fn read_bool(&mut self) -> Result<bool, ReadingTcpContractFail>;
+    async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail>;
+    async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail>;
+    async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail>;
 }
 
 pub struct SocketReader {
@@ -37,15 +37,15 @@ impl SocketReader {
 
 #[async_trait]
 impl TSocketReader for SocketReader {
-    async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), MySbSocketError> {
+    async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail> {
         let read = self.tcp_stream.read_exact(buf).await?;
 
         if read == 0 {
-            return Err(MySbSocketError::SocketDisconnected);
+            return Err(ReadingTcpContractFail::SocketDisconnected);
         }
 
         if read != buf.len() {
-            return Err(MySbSocketError::ErrorReadingSize);
+            return Err(ReadingTcpContractFail::ErrorReadingSize);
         }
 
         self.read_size += read;
@@ -53,12 +53,12 @@ impl TSocketReader for SocketReader {
         Ok(())
     }
 
-    async fn read_byte(&mut self) -> Result<u8, MySbSocketError> {
+    async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
         let mut buf = [0u8];
         let read = self.tcp_stream.read(&mut buf).await?;
 
         if read == 0 {
-            return Err(MySbSocketError::SocketDisconnected);
+            return Err(ReadingTcpContractFail::SocketDisconnected);
         }
 
         self.read_size += 1;
@@ -66,7 +66,7 @@ impl TSocketReader for SocketReader {
         return Ok(buf[0]);
     }
 
-    async fn read_i32(&mut self) -> Result<i32, MySbSocketError> {
+    async fn read_i32(&mut self) -> Result<i32, ReadingTcpContractFail> {
         const DATA_SIZE: usize = 4;
         let mut buf = [0u8; DATA_SIZE];
 
@@ -77,7 +77,7 @@ impl TSocketReader for SocketReader {
         Ok(i32::from_le_bytes(buf))
     }
 
-    async fn read_i64(&mut self) -> Result<i64, MySbSocketError> {
+    async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail> {
         const DATA_SIZE: usize = 8;
         let mut buf = [0u8; DATA_SIZE];
 
@@ -88,13 +88,13 @@ impl TSocketReader for SocketReader {
         Ok(i64::from_le_bytes(buf))
     }
 
-    async fn read_bool(&mut self) -> Result<bool, MySbSocketError> {
+    async fn read_bool(&mut self) -> Result<bool, ReadingTcpContractFail> {
         let b = self.read_byte().await?;
 
         return Ok(b > 0);
     }
 
-    async fn read_byte_array(&mut self) -> Result<Vec<u8>, MySbSocketError> {
+    async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail> {
         let size = self.read_i32().await? as usize;
 
         let mut value: Vec<u8> = Vec::with_capacity(size);

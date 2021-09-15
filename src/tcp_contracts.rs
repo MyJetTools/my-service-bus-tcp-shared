@@ -1,7 +1,7 @@
 use my_service_bus_shared::{queue_with_intervals::QueueIndexRange, MessageId, TopicQueueType};
 
 use super::{
-    common_serializers::*, tcp_message_id::*, MySbSocketError, PacketVersions, TSocketReader,
+    common_serializers::*, tcp_message_id::*, PacketVersions, ReadingTcpContractFail, TSocketReader,
 };
 
 use std::collections::HashMap;
@@ -104,7 +104,7 @@ impl TcpContract {
     pub async fn deserialize<T: TSocketReader>(
         socket_reader: &mut T,
         attr: &ConnectionAttributes,
-    ) -> Result<TcpContract, MySbSocketError> {
+    ) -> Result<TcpContract, ReadingTcpContractFail> {
         let packet_no = socket_reader.read_byte().await?;
 
         let result = match packet_no {
@@ -307,7 +307,7 @@ impl TcpContract {
                 Ok(result)
             }
 
-            _ => Err(MySbSocketError::InvalidPacketId(packet_no)),
+            _ => Err(ReadingTcpContractFail::InvalidPacketId(packet_no)),
         };
 
         return result;
@@ -448,7 +448,7 @@ impl TcpContract {
 async fn read_legacy_long<T: TSocketReader>(
     data_reader: &mut T,
     attr: &ConnectionAttributes,
-) -> Result<i64, MySbSocketError> {
+) -> Result<i64, ReadingTcpContractFail> {
     if attr.protocol_version >= 2 {
         return data_reader.read_i64().await;
     }
@@ -493,12 +493,12 @@ mod tests {
 
     #[async_trait]
     impl TSocketReader for DataReaderMock {
-        async fn read_byte(&mut self) -> Result<u8, MySbSocketError> {
+        async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
             let result = self.data.remove(0);
             Ok(result)
         }
 
-        async fn read_i32(&mut self) -> Result<i32, MySbSocketError> {
+        async fn read_i32(&mut self) -> Result<i32, ReadingTcpContractFail> {
             const DATA_SIZE: usize = 4;
 
             let mut buf = [0u8; DATA_SIZE];
@@ -514,12 +514,12 @@ mod tests {
             Ok(result)
         }
 
-        async fn read_bool(&mut self) -> Result<bool, MySbSocketError> {
+        async fn read_bool(&mut self) -> Result<bool, ReadingTcpContractFail> {
             let result = self.read_byte().await?;
             Ok(result > 0u8)
         }
 
-        async fn read_byte_array(&mut self) -> Result<Vec<u8>, MySbSocketError> {
+        async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail> {
             let len = self.read_i32().await? as usize;
 
             let mut result: Vec<u8> = Vec::new();
@@ -531,12 +531,12 @@ mod tests {
             Ok(result)
         }
 
-        async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), MySbSocketError> {
+        async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail> {
             buf.copy_from_slice(self.data.drain(0..buf.len()).as_slice());
             Ok(())
         }
 
-        async fn read_i64(&mut self) -> Result<i64, MySbSocketError> {
+        async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail> {
             const DATA_SIZE: usize = 8;
 
             let mut buf = [0u8; DATA_SIZE];

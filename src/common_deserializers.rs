@@ -1,10 +1,10 @@
 use my_service_bus_shared::queue_with_intervals::QueueIndexRange;
 
-use super::{MySbSocketError, TSocketReader};
+use super::{ReadingTcpContractFail, TSocketReader};
 
 pub async fn read_pascal_string<T: TSocketReader>(
     reader: &mut T,
-) -> Result<String, MySbSocketError> {
+) -> Result<String, ReadingTcpContractFail> {
     let size = reader.read_byte().await? as usize;
 
     let mut result: Vec<u8> = Vec::with_capacity(size);
@@ -17,7 +17,7 @@ pub async fn read_pascal_string<T: TSocketReader>(
 
 pub async fn read_queue_with_intervals<T: TSocketReader>(
     reader: &mut T,
-) -> Result<Vec<QueueIndexRange>, MySbSocketError> {
+) -> Result<Vec<QueueIndexRange>, ReadingTcpContractFail> {
     let len = reader.read_i32().await?;
 
     let mut result: Vec<QueueIndexRange> = Vec::new();

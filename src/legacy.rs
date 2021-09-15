@@ -1,12 +1,12 @@
 use super::{
     common_serializers::*, tcp_contracts::ConnectionAttributes, tcp_contracts::RequestId,
-    MySbSocketError, TSocketReader,
+    ReadingTcpContractFail, TSocketReader,
 };
 
 pub async fn read_long<T: TSocketReader>(
     data_reader: &mut T,
     attr: &ConnectionAttributes,
-) -> Result<i64, MySbSocketError> {
+) -> Result<i64, ReadingTcpContractFail> {
     if attr.protocol_version >= 2 {
         return data_reader.read_i64().await;
     }
