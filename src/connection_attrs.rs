@@ -1,3 +1,5 @@
+use super::PacketVersions;
+
 pub struct ConnectionAttributes {
     pub versions: PacketVersions,
     pub protocol_version: i32,
