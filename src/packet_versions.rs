@@ -22,4 +22,8 @@ impl PacketVersions {
             self.versions[*i as usize] = *v
         }
     }
+
+    pub fn set_packet_version(&mut self, packet: u8, value: i32) {
+        self.versions[packet as usize] = value;
+    }
 }
