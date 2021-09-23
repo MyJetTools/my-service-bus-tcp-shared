@@ -540,6 +540,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_ping_packet() {
+        let tcp_packet = TcpContract::Ping;
+
+        let mut socket_reader = DataReaderMock::new();
+        let attr = ConnectionAttributes::new();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Ping => {}
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pong_packet() {
+        let tcp_packet = TcpContract::Pong;
+
+        let mut socket_reader = DataReaderMock::new();
+        let attr = ConnectionAttributes::new();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Pong => {}
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_greeting_packet() {
         let test_app_name = "testtttt";
         let test_protocol_version = 255;
@@ -568,6 +612,138 @@ mod tests {
             } => {
                 assert_eq!(test_app_name, name);
                 assert_eq!(test_protocol_version, protocol_version);
+            }
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_publish_packet() {
+        let request_id_test = 1;
+        let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
+        let topic_test = String::from("test-topic");
+        let persist_test = true;
+
+        let tcp_packet = TcpContract::Publish {
+            data_to_publish: data_test,
+            persist_immediately: persist_test,
+            request_id: request_id_test,
+            topic_id: topic_test,
+        };
+
+        let mut socket_reader = DataReaderMock::new();
+
+        let attr = ConnectionAttributes::new();
+
+        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Publish {
+                data_to_publish,
+                persist_immediately,
+                request_id,
+                topic_id,
+            } => {
+                assert_eq!(request_id_test, request_id);
+                assert_eq!(String::from("test-topic"), topic_id);
+                assert_eq!(persist_test, persist_immediately);
+                
+                let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
+
+                for index in 0..data_to_publish[0].len() {
+                    assert_eq!(data_test[0][index], data_to_publish[0][index]);
+                }
+
+            }
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_publish_response_packet() {
+        let request_id_test = 1;
+
+        let tcp_packet = TcpContract::PublishResponse {
+            request_id: request_id_test
+        };
+
+        let mut socket_reader = DataReaderMock::new();
+
+        let attr = ConnectionAttributes::new();
+
+        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::PublishResponse {
+                request_id
+            } => {
+                assert_eq!(request_id_test, request_id);
+            }
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_packet() {
+        let queue_id_test = String::from("queue");
+        let topic_id_test = String::from("topic");
+        let queue_type_test = TopicQueueType::PermanentWithSingleConnection;
+
+        let tcp_packet = TcpContract::Subscribe {
+            queue_id: queue_id_test,
+            topic_id: topic_id_test,
+            queue_type: queue_type_test
+        };
+
+        let mut socket_reader = DataReaderMock::new();
+
+        let attr = ConnectionAttributes::new();
+
+        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Subscribe {
+                queue_id,
+                queue_type,
+                topic_id
+            } => {
+                let queue_id_test = String::from("queue");
+                let topic_id_test = String::from("topic");
+
+                assert_eq!(queue_id_test, queue_id);
+                assert_eq!(topic_id_test, topic_id);
+                match queue_type  {
+                    TopicQueueType::PermanentWithSingleConnection => {
+
+                    }
+                    _ => {
+                        panic!("Invalid Queue Type");
+                    }
+                };
             }
             _ => {
                 panic!("Invalid Packet Type");
