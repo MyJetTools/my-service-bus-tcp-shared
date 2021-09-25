@@ -9,10 +9,12 @@ mod connection_attrs;
 mod error;
 mod packet_versions;
 mod socket_reader;
+mod tcp_contract_message;
 mod tcp_contracts;
 
-pub use connection_attrs::ConnectionAttributes;
+pub use connection_attrs::{ConnectionAttributes, PacketProtVer};
 pub use error::ReadingTcpContractFail;
 pub use packet_versions::PacketVersions;
 pub use socket_reader::{SocketReader, TSocketReader};
-pub use tcp_contracts::{PacketProtVer, TcpContract, TcpContractMessage};
+pub use tcp_contract_message::TcpContractMessage;
+pub use tcp_contracts::TcpContract;

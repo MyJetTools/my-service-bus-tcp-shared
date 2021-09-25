@@ -1,8 +1,6 @@
-use my_service_bus_shared::{
-    queue::TopicQueueType, queue_with_intervals::QueueIndexRange, MessageId,
-};
+use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
 
-use crate::ConnectionAttributes;
+use crate::{ConnectionAttributes, TcpContractMessage};
 
 use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
 
@@ -11,19 +9,6 @@ use std::collections::HashMap;
 pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
-
-#[derive(Debug)]
-pub struct PacketProtVer {
-    pub packet_version: i32,
-    pub protocol_version: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct TcpContractMessage {
-    pub id: MessageId,
-    pub attempt_no: i32,
-    pub content: Vec<u8>,
-}
 
 #[derive(Debug)]
 pub enum TcpContract {
@@ -51,7 +36,13 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
     },
-    NewMessages(Vec<u8>),
+    NewMessagesServerSide(Vec<u8>),
+    NewMessages {
+        topic_id: String,
+        queue_id: String,
+        confirmation_id: i64,
+        messages: Vec<TcpContractMessage>,
+    },
     NewMessagesConfirmation {
         topic_id: String,
         queue_id: String,
@@ -111,7 +102,8 @@ impl TcpContract {
             PUBLISH => {
                 let topic_id =
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
-                let request_id = read_legacy_long(socket_reader, attr).await?;
+                let request_id =
+                    super::legacy::read_long_with_connection_attr(socket_reader, attr).await?;
                 let messages_count = socket_reader.read_i32().await? as usize;
 
                 let mut data_to_publish: Vec<Vec<u8>> = Vec::with_capacity(messages_count);
@@ -130,7 +122,8 @@ impl TcpContract {
                 Ok(result)
             }
             PUBLISH_RESPONSE => {
-                let request_id = read_legacy_long(socket_reader, attr).await?;
+                let request_id =
+                    super::legacy::read_long_with_connection_attr(socket_reader, attr).await?;
                 let result = TcpContract::PublishResponse { request_id };
 
                 Ok(result)
@@ -161,20 +154,20 @@ impl TcpContract {
 
                 Ok(result)
             }
+
             NEW_MESSAGE => {
-                //Client Package
-                /*
-                let topic_id = socket_reader.read_pascal_string().await?;
-                let queue_id = socket_reader.read_pascal_string().await?;
+                let topic_id =
+                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                let queue_id =
+                    super::common_deserializers::read_pascal_string(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let records_len = socket_reader.read_i32().await? as usize;
-                let packet_version = attr.versions.get_packet_version(packet_no);
 
                 let mut messages: Vec<TcpContractMessage> = Vec::new();
                 for _ in 0..records_len {
                     let msg =
-                        tcp_packet_message::deserialize(socket_reader, packet_version).await?;
+                        TcpContractMessage::serialize(socket_reader, &attr.get(packet_no)).await?;
                     messages.push(msg);
                 }
 
@@ -184,9 +177,8 @@ impl TcpContract {
                     confirmation_id,
                     messages,
                 };
-                */
 
-                panic!("This is a client packet. We should not have it on server");
+                Ok(result)
             }
             ALL_MESSAGES_DELIVERED_CONFIRMATION => {
                 let topic_id =
@@ -327,14 +319,14 @@ impl TcpContract {
             } => {
                 result.push(PUBLISH);
                 serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_legacy_long(&mut result, request_id, attr);
+                crate::legacy::serialize_long(&mut result, request_id, attr);
                 serialize_list_of_arrays(&mut result, &data_to_publish);
                 serialize_bool(&mut result, persist_immediately);
             }
 
             TcpContract::PublishResponse { request_id } => {
                 result.push(PUBLISH_RESPONSE);
-                serialize_legacy_long(&mut result, request_id, attr);
+                crate::legacy::serialize_long(&mut result, request_id, attr);
             }
             TcpContract::Subscribe {
                 topic_id,
@@ -351,8 +343,18 @@ impl TcpContract {
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());
             }
-            TcpContract::NewMessages(payload) => {
+            TcpContract::NewMessagesServerSide(payload) => {
                 return payload;
+            }
+            TcpContract::NewMessages {
+                topic_id: _,
+                queue_id: _,
+                confirmation_id: _,
+                messages: _,
+            } => {
+                panic!(
+                    "This packet is not used by server. Server uses optimized veriosn of the packet"
+                );
             }
             TcpContract::NewMessagesConfirmation {
                 topic_id,
@@ -430,32 +432,6 @@ impl TcpContract {
         }
 
         return result;
-    }
-}
-
-async fn read_legacy_long<T: TSocketReader>(
-    data_reader: &mut T,
-    attr: &ConnectionAttributes,
-) -> Result<i64, ReadingTcpContractFail> {
-    if attr.protocol_version >= 2 {
-        return data_reader.read_i64().await;
-    }
-
-    return match data_reader.read_i32().await {
-        Ok(res) => Ok(res as i64),
-        Err(err) => Err(err),
-    };
-}
-
-pub fn serialize_legacy_long(
-    data: &mut Vec<u8>,
-    request_id: RequestId,
-    attr: &ConnectionAttributes,
-) {
-    if attr.protocol_version < 2 {
-        serialize_i32(data, request_id as i32);
-    } else {
-        serialize_i64(data, request_id);
     }
 }
 
@@ -657,13 +633,12 @@ mod tests {
                 assert_eq!(request_id_test, request_id);
                 assert_eq!(String::from("test-topic"), topic_id);
                 assert_eq!(persist_test, persist_immediately);
-                
+
                 let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
 
                 for index in 0..data_to_publish[0].len() {
                     assert_eq!(data_test[0][index], data_to_publish[0][index]);
                 }
-
             }
             _ => {
                 panic!("Invalid Packet Type");
@@ -676,7 +651,7 @@ mod tests {
         let request_id_test = 1;
 
         let tcp_packet = TcpContract::PublishResponse {
-            request_id: request_id_test
+            request_id: request_id_test,
         };
 
         let mut socket_reader = DataReaderMock::new();
@@ -692,9 +667,7 @@ mod tests {
             .unwrap();
 
         match result {
-            TcpContract::PublishResponse {
-                request_id
-            } => {
+            TcpContract::PublishResponse { request_id } => {
                 assert_eq!(request_id_test, request_id);
             }
             _ => {
@@ -712,7 +685,7 @@ mod tests {
         let tcp_packet = TcpContract::Subscribe {
             queue_id: queue_id_test,
             topic_id: topic_id_test,
-            queue_type: queue_type_test
+            queue_type: queue_type_test,
         };
 
         let mut socket_reader = DataReaderMock::new();
@@ -731,17 +704,15 @@ mod tests {
             TcpContract::Subscribe {
                 queue_id,
                 queue_type,
-                topic_id
+                topic_id,
             } => {
                 let queue_id_test = String::from("queue");
                 let topic_id_test = String::from("topic");
 
                 assert_eq!(queue_id_test, queue_id);
                 assert_eq!(topic_id_test, topic_id);
-                match queue_type  {
-                    TopicQueueType::PermanentWithSingleConnection => {
-
-                    }
+                match queue_type {
+                    TopicQueueType::PermanentWithSingleConnection => {}
                     _ => {
                         panic!("Invalid Queue Type");
                     }

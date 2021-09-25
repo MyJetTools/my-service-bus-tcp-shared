@@ -8,6 +8,7 @@ const PUBLISH_RESPONSE_NAME: &str = "PublishResponse";
 const SUBSCRIBE_NAME: &str = "Subscribe";
 const SUBSCRIBER_RESPONSE: &str = "SubscribeResponse";
 const NEW_MESSAGES: &str = "NewMessages";
+const NEW_MESSAGES_SERVER: &str = "NewMessagesServer";
 
 const NEW_MESSAGES_CONFIRMATION: &str = "NewMessagesConfirmation";
 
@@ -47,7 +48,13 @@ impl TcpContract {
                 topic_id: _,
                 queue_id: _,
             } => SUBSCRIBER_RESPONSE,
-            TcpContract::NewMessages(_) => NEW_MESSAGES,
+            TcpContract::NewMessages {
+                topic_id: _,
+                messages: _,
+                confirmation_id: _,
+                queue_id: _,
+            } => NEW_MESSAGES,
+            TcpContract::NewMessagesServerSide(_) => NEW_MESSAGES_SERVER,
             TcpContract::NewMessagesConfirmation {
                 topic_id: _,
                 queue_id: _,
