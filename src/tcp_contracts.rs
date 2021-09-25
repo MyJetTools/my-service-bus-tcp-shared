@@ -1,4 +1,6 @@
-use my_service_bus_shared::{queue_with_intervals::QueueIndexRange, MessageId, TopicQueueType};
+use my_service_bus_shared::{
+    queue::TopicQueueType, queue_with_intervals::QueueIndexRange, MessageId,
+};
 
 use crate::ConnectionAttributes;
 
