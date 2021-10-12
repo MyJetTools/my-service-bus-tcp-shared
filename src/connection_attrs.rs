@@ -1,11 +1,12 @@
 use super::PacketVersions;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PacketProtVer {
     pub packet_version: i32,
     pub protocol_version: i32,
 }
 
+#[derive(Clone)]
 pub struct ConnectionAttributes {
     pub versions: PacketVersions,
     pub protocol_version: i32,
