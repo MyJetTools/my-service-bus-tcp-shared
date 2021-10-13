@@ -1,6 +1,8 @@
-use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
+use my_service_bus_shared::{
+    messages_bucket::MessagesBucket, queue::TopicQueueType, queue_with_intervals::QueueIndexRange,
+};
 
-use crate::{ConnectionAttributes, TcpContractMessage};
+use crate::{tcp_message_id, ConnectionAttributes, TcpContractMessage};
 
 use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
 
@@ -153,7 +155,7 @@ impl TcpContract {
                 Ok(result)
             }
 
-            NEW_MESSAGE => {
+            NEW_MESSAGES => {
                 let topic_id =
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
                 let queue_id =
@@ -162,7 +164,7 @@ impl TcpContract {
 
                 let records_len = socket_reader.read_i32().await? as usize;
 
-                let mut messages: Vec<TcpContractMessage> = Vec::new();
+                let mut messages: Vec<TcpContractMessage> = Vec::with_capacity(records_len);
                 let packet_version = attr.get_packet_version(packet_no);
                 for _ in 0..records_len {
                     let msg = TcpContractMessage::serialize(socket_reader, packet_version).await?;
@@ -431,13 +433,43 @@ impl TcpContract {
 
         return result;
     }
+
+    pub async fn compile_messages_to_deliver(
+        messages_to_deliver: &MessagesBucket,
+        topic_id: &str,
+        queue_id: &str,
+        subscriber_id: i64,
+        packet_version: i32,
+    ) -> Self {
+        let mut result = Vec::new();
+
+        result.push(tcp_message_id::NEW_MESSAGES);
+        serialize_pascal_string(&mut result, topic_id);
+        serialize_pascal_string(&mut result, queue_id);
+        serialize_i64(&mut result, subscriber_id);
+
+        crate::messages_to_deliver_helpers::serialize_messages(
+            &mut result,
+            packet_version,
+            messages_to_deliver,
+        )
+        .await;
+
+        Self::NewMessagesServerSide(result)
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use std::sync::Arc;
+
     use super::*;
     use async_trait::async_trait;
+    use my_service_bus_shared::{
+        date_time::DateTimeAsMicroseconds, messages_page::MessagesPage, MySbMessage,
+        MySbMessageContent,
+    };
 
     struct DataReaderMock {
         data: Vec<u8>,
@@ -719,6 +751,59 @@ mod tests {
             _ => {
                 panic!("Invalid Packet Type");
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_server_messasges_serialization() {
+        let message15 = MySbMessage::Loaded(MySbMessageContent {
+            id: 15,
+            content: vec![1, 2, 3],
+            time: DateTimeAsMicroseconds::now(),
+        });
+
+        let page = MessagesPage::new(0);
+        page.restore(vec![message15]).await;
+
+        let page = Arc::new(page);
+
+        let mut messages_bucket = MessagesBucket::new(page);
+
+        messages_bucket.add(15, 1, 3);
+
+        let packet =
+            TcpContract::compile_messages_to_deliver(&messages_bucket, "topic", "queue", 5, 1)
+                .await;
+
+        let bytes = packet.serialize();
+
+        let mut socket_reader = DataReaderMock::new();
+        socket_reader.push(&bytes);
+
+        let mut attr = ConnectionAttributes::new();
+
+        attr.versions
+            .set_packet_version(tcp_message_id::NEW_MESSAGES, 1);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        if let TcpContract::NewMessages {
+            topic_id,
+            queue_id,
+            confirmation_id,
+            messages,
+        } = result
+        {
+            assert_eq!("topic", topic_id);
+            assert_eq!("queue", queue_id);
+            assert_eq!(5, confirmation_id);
+            assert_eq!(15, messages[0].id);
+            assert_eq!(1, messages[0].attempt_no);
+            assert_eq!(vec![1u8, 2u8, 3u8], messages[0].content);
+        } else {
+            panic!("Invalid TcpContract");
         }
     }
 }

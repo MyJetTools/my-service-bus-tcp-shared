@@ -6,6 +6,7 @@ pub mod tcp_message_id;
 
 mod connection_attrs;
 mod error;
+mod messages_to_deliver_helpers;
 mod packet_versions;
 mod socket_reader;
 mod tcp_contract_message;
