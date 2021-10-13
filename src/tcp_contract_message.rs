@@ -1,6 +1,6 @@
 use my_service_bus_shared::MessageId;
 
-use crate::{PacketProtVer, ReadingTcpContractFail, TSocketReader};
+use crate::{ReadingTcpContractFail, TSocketReader};
 
 #[derive(Debug, Clone)]
 pub struct TcpContractMessage {
@@ -13,11 +13,11 @@ impl TcpContractMessage {
     #[inline]
     pub async fn serialize<TGSocketReader: TSocketReader>(
         socket_reader: &mut TGSocketReader,
-        ver: &PacketProtVer,
+        packet_version: i32,
     ) -> Result<Self, ReadingTcpContractFail> {
-        let id = crate::legacy::read_long(socket_reader, ver).await?;
+        let id = socket_reader.read_i64().await?;
 
-        let attempt_no = if ver.packet_version == 1 {
+        let attempt_no = if packet_version == 1 {
             socket_reader.read_i32().await?
         } else {
             0

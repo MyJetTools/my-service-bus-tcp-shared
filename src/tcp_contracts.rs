@@ -102,8 +102,7 @@ impl TcpContract {
             PUBLISH => {
                 let topic_id =
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
-                let request_id =
-                    super::legacy::read_long_with_connection_attr(socket_reader, attr).await?;
+                let request_id = socket_reader.read_i64().await?;
                 let messages_count = socket_reader.read_i32().await? as usize;
 
                 let mut data_to_publish: Vec<Vec<u8>> = Vec::with_capacity(messages_count);
@@ -122,8 +121,7 @@ impl TcpContract {
                 Ok(result)
             }
             PUBLISH_RESPONSE => {
-                let request_id =
-                    super::legacy::read_long_with_connection_attr(socket_reader, attr).await?;
+                let request_id = socket_reader.read_i64().await?;
                 let result = TcpContract::PublishResponse { request_id };
 
                 Ok(result)
@@ -166,8 +164,11 @@ impl TcpContract {
 
                 let mut messages: Vec<TcpContractMessage> = Vec::new();
                 for _ in 0..records_len {
-                    let msg =
-                        TcpContractMessage::serialize(socket_reader, &attr.get(packet_no)).await?;
+                    let msg = TcpContractMessage::serialize(
+                        socket_reader,
+                        attr.get_packet_version(packet_no),
+                    )
+                    .await?;
                     messages.push(msg);
                 }
 
@@ -293,7 +294,7 @@ impl TcpContract {
         return result;
     }
 
-    pub fn serialize(self, attr: &ConnectionAttributes) -> Vec<u8> {
+    pub fn serialize(self) -> Vec<u8> {
         let mut result: Vec<u8> = Vec::new();
 
         match self {
@@ -319,14 +320,14 @@ impl TcpContract {
             } => {
                 result.push(PUBLISH);
                 serialize_pascal_string(&mut result, topic_id.as_str());
-                crate::legacy::serialize_long(&mut result, request_id, attr);
+                serialize_i64(&mut result, request_id);
                 serialize_list_of_arrays(&mut result, &data_to_publish);
                 serialize_bool(&mut result, persist_immediately);
             }
 
             TcpContract::PublishResponse { request_id } => {
                 result.push(PUBLISH_RESPONSE);
-                crate::legacy::serialize_long(&mut result, request_id, attr);
+                serialize_i64(&mut result, request_id);
             }
             TcpContract::Subscribe {
                 topic_id,
@@ -523,7 +524,7 @@ mod tests {
 
         let mut socket_reader = DataReaderMock::new();
         let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 
@@ -545,7 +546,7 @@ mod tests {
 
         let mut socket_reader = DataReaderMock::new();
         let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 
@@ -575,7 +576,7 @@ mod tests {
 
         let attr = ConnectionAttributes::new();
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 
@@ -615,7 +616,7 @@ mod tests {
 
         let attr = ConnectionAttributes::new();
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 
@@ -658,7 +659,7 @@ mod tests {
 
         let attr = ConnectionAttributes::new();
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 
@@ -692,7 +693,7 @@ mod tests {
 
         let attr = ConnectionAttributes::new();
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize(&attr);
+        let serialized_data: Vec<u8> = tcp_packet.serialize();
 
         socket_reader.push(&serialized_data);
 

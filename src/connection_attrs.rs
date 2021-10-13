@@ -26,4 +26,7 @@ impl ConnectionAttributes {
             packet_version: self.versions.get_packet_version(packet_no),
         }
     }
+    pub fn get_packet_version(&self, packet_no: u8) -> i32 {
+        self.versions.get_packet_version(packet_no)
+    }
 }
