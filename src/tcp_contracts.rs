@@ -163,12 +163,9 @@ impl TcpContract {
                 let records_len = socket_reader.read_i32().await? as usize;
 
                 let mut messages: Vec<TcpContractMessage> = Vec::new();
+                let packet_version = attr.get_packet_version(packet_no);
                 for _ in 0..records_len {
-                    let msg = TcpContractMessage::serialize(
-                        socket_reader,
-                        attr.get_packet_version(packet_no),
-                    )
-                    .await?;
+                    let msg = TcpContractMessage::serialize(socket_reader, packet_version).await?;
                     messages.push(msg);
                 }
 
