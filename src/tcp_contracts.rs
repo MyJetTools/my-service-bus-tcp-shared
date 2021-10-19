@@ -53,7 +53,7 @@ pub enum TcpContract {
     CreateTopicIfNotExists {
         topic_id: String,
     },
-    ConfirmMessagesByNotDelivery {
+    IntermediaryConfirm {
         packet_version: u8,
         topic_id: String,
         queue_id: String,
@@ -265,7 +265,7 @@ impl TcpContract {
                 Ok(result)
             }
 
-            CONFIRM_MESSAGES_BY_NOT_DELIVERY => {
+            INTERMEDIARY_CONFIRM => {
                 let packet_version = socket_reader.read_byte().await?;
                 let topic_id =
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
@@ -276,7 +276,7 @@ impl TcpContract {
                 let not_delivered =
                     super::common_deserializers::read_queue_with_intervals(socket_reader).await?;
 
-                let result = TcpContract::ConfirmMessagesByNotDelivery {
+                let result = TcpContract::IntermediaryConfirm {
                     packet_version,
                     topic_id,
                     queue_id,
@@ -370,14 +370,14 @@ impl TcpContract {
                 result.push(CREATE_TOPIC_IF_NOT_EXISTS);
                 serialize_pascal_string(&mut result, topic_id.as_str());
             }
-            TcpContract::ConfirmMessagesByNotDelivery {
+            TcpContract::IntermediaryConfirm {
                 packet_version,
                 topic_id,
                 queue_id,
                 confirmation_id,
                 not_delivered,
             } => {
-                result.push(CONFIRM_MESSAGES_BY_NOT_DELIVERY);
+                result.push(INTERMEDIARY_CONFIRM);
                 result.push(packet_version);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());

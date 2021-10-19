@@ -14,7 +14,7 @@ const NEW_MESSAGES_CONFIRMATION: &str = "NewMessagesConfirmation";
 
 const CREATE_TOPIC_IF_EXIST: &str = "CreateTopicIfExists";
 
-const CONFIRM_MESSAGES_BY_DELIVERY: &str = "ConfirmMessagesByNotDelivery";
+const INTERMEDIARY_CONFIRM: &str = "IntermediaryConfirm";
 
 const PACKET_VERSIONS: &str = "PacketVersions";
 const REJECT: &str = "Reject";
@@ -61,13 +61,13 @@ impl TcpContract {
                 confirmation_id: _,
             } => NEW_MESSAGES_CONFIRMATION,
             TcpContract::CreateTopicIfNotExists { topic_id: _ } => CREATE_TOPIC_IF_EXIST,
-            TcpContract::ConfirmMessagesByNotDelivery {
+            TcpContract::IntermediaryConfirm {
                 packet_version: _,
                 topic_id: _,
                 queue_id: _,
                 confirmation_id: _,
                 not_delivered: _,
-            } => CONFIRM_MESSAGES_BY_DELIVERY,
+            } => INTERMEDIARY_CONFIRM,
             TcpContract::PacketVersions { packet_versions: _ } => PACKET_VERSIONS,
             TcpContract::Reject { message: _ } => REJECT,
             TcpContract::AllMessagesConfirmedAsFail {

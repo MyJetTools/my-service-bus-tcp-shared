@@ -13,4 +13,4 @@ pub const PACKET_VERSIONS: u8 = 11;
 pub const REJECT: u8 = 12;
 pub const ALL_MESSAGES_NOT_DELIVERED_CONFIRMATION: u8 = 13;
 pub const CONFIRM_SOME_MESSAGES_AS_OK: u8 = 14;
-pub const CONFIRM_MESSAGES_BY_NOT_DELIVERY: u8 = 15;
+pub const INTERMEDIARY_CONFIRM: u8 = 15; //Confirms some messages within Delivery but not complete Delivery
