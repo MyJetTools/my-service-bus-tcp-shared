@@ -58,7 +58,7 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
         confirmation_id: ConfirmationId,
-        not_delivered: Vec<QueueIndexRange>,
+        delivered: Vec<QueueIndexRange>,
     },
     PacketVersions {
         packet_versions: HashMap<u8, i32>,
@@ -273,7 +273,7 @@ impl TcpContract {
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
-                let not_delivered =
+                let delivered =
                     super::common_deserializers::read_queue_with_intervals(socket_reader).await?;
 
                 let result = TcpContract::IntermediaryConfirm {
@@ -281,7 +281,7 @@ impl TcpContract {
                     topic_id,
                     queue_id,
                     confirmation_id,
-                    not_delivered,
+                    delivered,
                 };
 
                 Ok(result)
@@ -375,7 +375,7 @@ impl TcpContract {
                 topic_id,
                 queue_id,
                 confirmation_id,
-                not_delivered,
+                delivered,
             } => {
                 result.push(INTERMEDIARY_CONFIRM);
                 result.push(packet_version);
@@ -383,10 +383,7 @@ impl TcpContract {
                 serialize_pascal_string(&mut result, queue_id.as_str());
                 serialize_i64(&mut result, confirmation_id);
 
-                super::common_serializers::serialize_queue_with_intervals(
-                    &mut result,
-                    &not_delivered,
-                );
+                super::common_serializers::serialize_queue_with_intervals(&mut result, &delivered);
             }
             TcpContract::PacketVersions { packet_versions } => {
                 result.push(PACKET_VERSIONS);

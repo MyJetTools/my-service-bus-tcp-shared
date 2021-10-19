@@ -66,7 +66,7 @@ impl TcpContract {
                 topic_id: _,
                 queue_id: _,
                 confirmation_id: _,
-                not_delivered: _,
+                delivered: _,
             } => INTERMEDIARY_CONFIRM,
             TcpContract::PacketVersions { packet_versions: _ } => PACKET_VERSIONS,
             TcpContract::Reject { message: _ } => REJECT,
