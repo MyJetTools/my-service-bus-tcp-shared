@@ -7,6 +7,9 @@ pub async fn serialize_messages(
     packet_version: i32,
     messages_to_deliver: &MessagesBucket,
 ) {
+    todo!("Inmplement");
+
+    /*
     let messages_count = messages_to_deliver.messages_count() as i32;
 
     serialize_i32(result, messages_count);
@@ -35,6 +38,7 @@ pub async fn serialize_messages(
             println!("Message not found to pack {:?}", msg_id)
         }
     }
+    */
 }
 
 pub fn serialize_message(

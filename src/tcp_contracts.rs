@@ -463,10 +463,8 @@ mod tests {
 
     use super::*;
     use async_trait::async_trait;
-    use my_service_bus_shared::{
-        date_time::DateTimeAsMicroseconds, messages_page::MessagesPage, MySbMessage,
-        MySbMessageContent,
-    };
+    use my_service_bus_shared::{messages_page::MessagesPage, MySbMessage, MySbMessageContent};
+    use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     struct DataReaderMock {
         data: Vec<u8>,
@@ -753,6 +751,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_server_messasges_serialization() {
+        todo!("Implement");
+
+        /*
         let message15 = MySbMessage::Loaded(MySbMessageContent {
             id: 15,
             content: vec![1, 2, 3],
@@ -760,9 +761,7 @@ mod tests {
         });
 
         let page = MessagesPage::new(0);
-        page.restore(vec![message15]).await;
-
-        let page = Arc::new(page);
+        page.restore(vec![message15]);
 
         let mut messages_bucket = MessagesBucket::new(page);
 
@@ -802,5 +801,6 @@ mod tests {
         } else {
             panic!("Invalid TcpContract");
         }
+        */
     }
 }
