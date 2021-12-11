@@ -1,8 +1,6 @@
-use my_service_bus_shared::{
-    messages_bucket::MessagesBucket, queue::TopicQueueType, queue_with_intervals::QueueIndexRange,
-};
+use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
 
-use crate::{tcp_message_id, ConnectionAttributes, TcpContractMessage};
+use crate::{ConnectionAttributes, TcpContractMessage};
 
 use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
 
@@ -430,117 +428,14 @@ impl TcpContract {
 
         return result;
     }
-
-    pub async fn compile_messages_to_deliver(
-        messages_to_deliver: &MessagesBucket,
-        topic_id: &str,
-        queue_id: &str,
-        subscriber_id: i64,
-        packet_version: i32,
-    ) -> Self {
-        let mut result = Vec::new();
-
-        result.push(tcp_message_id::NEW_MESSAGES);
-        serialize_pascal_string(&mut result, topic_id);
-        serialize_pascal_string(&mut result, queue_id);
-        serialize_i64(&mut result, subscriber_id);
-
-        crate::messages_to_deliver_helpers::serialize_messages(
-            &mut result,
-            packet_version,
-            messages_to_deliver,
-        )
-        .await;
-
-        Self::NewMessagesServerSide(result)
-    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
+    use crate::test_utils::DataReaderMock;
 
     use super::*;
-    use async_trait::async_trait;
-    use my_service_bus_shared::{messages_page::MessagesPage, MySbMessage, MySbMessageContent};
-    use rust_extensions::date_time::DateTimeAsMicroseconds;
-
-    struct DataReaderMock {
-        data: Vec<u8>,
-    }
-
-    impl DataReaderMock {
-        pub fn new() -> DataReaderMock {
-            DataReaderMock { data: Vec::new() }
-        }
-
-        pub fn push(&mut self, data: &[u8]) {
-            self.data.extend(data);
-        }
-    }
-
-    #[async_trait]
-    impl TSocketReader for DataReaderMock {
-        async fn read_byte(&mut self) -> Result<u8, ReadingTcpContractFail> {
-            let result = self.data.remove(0);
-            Ok(result)
-        }
-
-        async fn read_i32(&mut self) -> Result<i32, ReadingTcpContractFail> {
-            const DATA_SIZE: usize = 4;
-
-            let mut buf = [0u8; DATA_SIZE];
-
-            buf.copy_from_slice(&self.data[0..DATA_SIZE]);
-
-            let result = i32::from_le_bytes(buf);
-
-            for _ in 0..DATA_SIZE {
-                self.data.remove(0);
-            }
-
-            Ok(result)
-        }
-
-        async fn read_bool(&mut self) -> Result<bool, ReadingTcpContractFail> {
-            let result = self.read_byte().await?;
-            Ok(result > 0u8)
-        }
-
-        async fn read_byte_array(&mut self) -> Result<Vec<u8>, ReadingTcpContractFail> {
-            let len = self.read_i32().await? as usize;
-
-            let mut result: Vec<u8> = Vec::new();
-
-            for b in self.data.drain(0..len) {
-                result.push(b);
-            }
-
-            Ok(result)
-        }
-
-        async fn read_buf(&mut self, buf: &mut [u8]) -> Result<(), ReadingTcpContractFail> {
-            buf.copy_from_slice(self.data.drain(0..buf.len()).as_slice());
-            Ok(())
-        }
-
-        async fn read_i64(&mut self) -> Result<i64, ReadingTcpContractFail> {
-            const DATA_SIZE: usize = 8;
-
-            let mut buf = [0u8; DATA_SIZE];
-
-            buf.copy_from_slice(&self.data[0..DATA_SIZE]);
-
-            let result = i64::from_le_bytes(buf);
-
-            for _ in 0..DATA_SIZE {
-                self.data.remove(0);
-            }
-
-            Ok(result)
-        }
-    }
 
     #[tokio::test]
     async fn test_ping_packet() {
@@ -747,60 +642,5 @@ mod tests {
                 panic!("Invalid Packet Type");
             }
         }
-    }
-
-    #[tokio::test]
-    async fn test_server_messasges_serialization() {
-        todo!("Implement");
-
-        /*
-        let message15 = MySbMessage::Loaded(MySbMessageContent {
-            id: 15,
-            content: vec![1, 2, 3],
-            time: DateTimeAsMicroseconds::now(),
-        });
-
-        let page = MessagesPage::new(0);
-        page.restore(vec![message15]);
-
-        let mut messages_bucket = MessagesBucket::new(page);
-
-        messages_bucket.add(15, 1, 3);
-
-        let packet =
-            TcpContract::compile_messages_to_deliver(&messages_bucket, "topic", "queue", 5, 1)
-                .await;
-
-        let bytes = packet.serialize();
-
-        let mut socket_reader = DataReaderMock::new();
-        socket_reader.push(&bytes);
-
-        let mut attr = ConnectionAttributes::new();
-
-        attr.versions
-            .set_packet_version(tcp_message_id::NEW_MESSAGES, 1);
-
-        let result = TcpContract::deserialize(&mut socket_reader, &attr)
-            .await
-            .unwrap();
-
-        if let TcpContract::NewMessages {
-            topic_id,
-            queue_id,
-            confirmation_id,
-            messages,
-        } = result
-        {
-            assert_eq!("topic", topic_id);
-            assert_eq!("queue", queue_id);
-            assert_eq!(5, confirmation_id);
-            assert_eq!(15, messages[0].id);
-            assert_eq!(1, messages[0].attempt_no);
-            assert_eq!(vec![1u8, 2u8, 3u8], messages[0].content);
-        } else {
-            panic!("Invalid TcpContract");
-        }
-        */
     }
 }
