@@ -6,16 +6,23 @@ pub struct DeliveryPackageBuilder<'s> {
     pub topic_id: &'s str,
     pub queue_id: &'s str,
     pub subscriber_id: i64,
+    pub delivery_packet_version: i32,
     pub messages: Vec<(&'s MySbMessageContent, i32)>,
     pub ids: QueueWithIntervals,
 }
 
 impl<'s> DeliveryPackageBuilder<'s> {
-    pub fn new(topic_id: &'s str, queue_id: &'s str, subscriber_id: i64) -> Self {
+    pub fn new(
+        topic_id: &'s str,
+        queue_id: &'s str,
+        subscriber_id: i64,
+        delivery_packet_version: i32,
+    ) -> Self {
         Self {
             topic_id,
             queue_id,
             subscriber_id,
+            delivery_packet_version,
             messages: Vec::new(),
             ids: QueueWithIntervals::new(),
         }
@@ -30,7 +37,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
         self.messages.len()
     }
 
-    pub fn build(&self, packet_version: i32) -> TcpContract {
+    pub fn build(&self) -> TcpContract {
         let mut buffer = Vec::new();
 
         buffer.push(tcp_message_id::NEW_MESSAGES);
@@ -38,18 +45,23 @@ impl<'s> DeliveryPackageBuilder<'s> {
         serialize_pascal_string(&mut buffer, self.queue_id);
         serialize_i64(&mut buffer, self.subscriber_id);
 
-        self.serialize_messages(&mut buffer, packet_version);
+        self.serialize_messages(&mut buffer);
 
         TcpContract::NewMessagesServerSide(buffer)
     }
 
-    fn serialize_messages(&self, result: &mut Vec<u8>, packet_version: i32) {
+    fn serialize_messages(&self, result: &mut Vec<u8>) {
         let messages_count = self.messages.len() as i32;
 
         serialize_i32(result, messages_count);
 
         for (msg_content, attempt_no) in &self.messages {
-            serialize_message(result, msg_content, *attempt_no, packet_version);
+            serialize_message(
+                result,
+                msg_content,
+                *attempt_no,
+                self.delivery_packet_version,
+            );
         }
     }
 }
@@ -85,12 +97,12 @@ mod tests {
             MySbMessageContent::new(2, vec![2, 2, 2], DateTimeAsMicroseconds::now()),
         ];
 
-        let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15);
+        let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1);
 
         package_builder.add_message(contents.get(0).unwrap(), 1);
         package_builder.add_message(contents.get(1).unwrap(), 2);
 
-        let tcp_contract = package_builder.build(1);
+        let tcp_contract = package_builder.build();
 
         let payload = tcp_contract.serialize();
 
