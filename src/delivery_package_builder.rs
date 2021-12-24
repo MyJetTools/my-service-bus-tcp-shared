@@ -9,6 +9,7 @@ pub struct DeliveryPackageBuilder<'s> {
     pub delivery_packet_version: i32,
     pub messages: Vec<(&'s MySbMessageContent, i32)>,
     pub ids: QueueWithIntervals,
+    pub payload_size: usize,
 }
 
 impl<'s> DeliveryPackageBuilder<'s> {
@@ -25,10 +26,12 @@ impl<'s> DeliveryPackageBuilder<'s> {
             delivery_packet_version,
             messages: Vec::new(),
             ids: QueueWithIntervals::new(),
+            payload_size: 0,
         }
     }
 
     pub fn add_message(&mut self, msg: &'s MySbMessageContent, attempt_no: i32) {
+        self.payload_size += msg.content.len();
         self.messages.push((msg, attempt_no));
         self.ids.enqueue(msg.id);
     }
