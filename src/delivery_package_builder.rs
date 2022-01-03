@@ -88,10 +88,11 @@ mod tests {
 
     use std::collections::HashMap;
 
+    use my_tcp_sockets::socket_reader::SocketReaderMock;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use super::*;
-    use crate::{test_utils::DataReaderMock, ConnectionAttributes};
+    use crate::ConnectionAttributes;
 
     #[tokio::test]
     async fn test_basic_usecase() {
@@ -109,7 +110,7 @@ mod tests {
 
         let payload = tcp_contract.serialize();
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
 
         let mut attr = ConnectionAttributes::new();
         let mut versions = HashMap::new();

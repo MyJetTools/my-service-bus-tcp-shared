@@ -1,6 +1,5 @@
 use my_service_bus_shared::MessageId;
-
-use crate::{ReadingTcpContractFail, TSocketReader};
+use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 #[derive(Debug, Clone)]
 pub struct TcpContractMessage {
@@ -11,8 +10,8 @@ pub struct TcpContractMessage {
 
 impl TcpContractMessage {
     #[inline]
-    pub async fn serialize<TGSocketReader: TSocketReader>(
-        socket_reader: &mut TGSocketReader,
+    pub async fn serialize<TSocketReader: SocketReader>(
+        socket_reader: &mut TSocketReader,
         packet_version: i32,
     ) -> Result<Self, ReadingTcpContractFail> {
         let id = socket_reader.read_i64().await?;

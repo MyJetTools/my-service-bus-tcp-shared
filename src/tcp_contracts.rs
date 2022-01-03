@@ -1,8 +1,9 @@
 use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
+use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::{ConnectionAttributes, TcpContractMessage};
 
-use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
+use super::{common_serializers::*, tcp_message_id::*};
 
 use std::collections::HashMap;
 
@@ -80,8 +81,8 @@ pub enum TcpContract {
 }
 
 impl TcpContract {
-    pub async fn deserialize<T: TSocketReader>(
-        socket_reader: &mut T,
+    pub async fn deserialize<TSocketReader: SocketReader>(
+        socket_reader: &mut TSocketReader,
         attr: &ConnectionAttributes,
     ) -> Result<TcpContract, ReadingTcpContractFail> {
         let packet_no = socket_reader.read_byte().await?;
@@ -433,7 +434,7 @@ impl TcpContract {
 #[cfg(test)]
 mod tests {
 
-    use crate::test_utils::DataReaderMock;
+    use my_tcp_sockets::socket_reader::SocketReaderMock;
 
     use super::*;
 
@@ -441,7 +442,7 @@ mod tests {
     async fn test_ping_packet() {
         let tcp_packet = TcpContract::Ping;
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
         let attr = ConnectionAttributes::new();
         let serialized_data: Vec<u8> = tcp_packet.serialize();
 
@@ -463,7 +464,7 @@ mod tests {
     async fn test_pong_packet() {
         let tcp_packet = TcpContract::Pong;
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
         let attr = ConnectionAttributes::new();
         let serialized_data: Vec<u8> = tcp_packet.serialize();
 
@@ -491,7 +492,7 @@ mod tests {
             protocol_version: test_protocol_version,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
 
         let attr = ConnectionAttributes::new();
 
@@ -531,7 +532,7 @@ mod tests {
             topic_id: topic_test,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
 
         let attr = ConnectionAttributes::new();
 
@@ -574,7 +575,7 @@ mod tests {
             request_id: request_id_test,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
 
         let attr = ConnectionAttributes::new();
 
@@ -608,7 +609,7 @@ mod tests {
             queue_type: queue_type_test,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut socket_reader = SocketReaderMock::new();
 
         let attr = ConnectionAttributes::new();
 
