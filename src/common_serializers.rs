@@ -2,6 +2,8 @@ use std::str;
 
 use my_service_bus_shared::queue_with_intervals::QueueIndexRange;
 
+use crate::PacketProtVer;
+
 pub fn serialize_byte(data: &mut Vec<u8>, v: u8) {
     data.push(v);
 }
@@ -49,5 +51,13 @@ pub fn serialize_queue_with_intervals(payload: &mut Vec<u8>, value: &Vec<QueueIn
     for itm in value {
         serialize_i64(payload, itm.from_id);
         serialize_i64(payload, itm.to_id);
+    }
+}
+
+pub fn serialize_long(payload: &mut Vec<u8>, value: i64, ver: &PacketProtVer) {
+    if ver.protocol_version < 2 {
+        serialize_i32(payload, value as i32);
+    } else {
+        serialize_i64(payload, value);
     }
 }

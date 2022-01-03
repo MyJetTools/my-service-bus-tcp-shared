@@ -293,22 +293,26 @@ impl TcpContract {
     }
 
     pub fn serialize(self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-
         match self {
             TcpContract::Ping {} => {
+                let mut result: Vec<u8> = Vec::with_capacity(1);
                 result.push(PING);
+                result
             }
             TcpContract::Pong {} => {
+                let mut result: Vec<u8> = Vec::with_capacity(1);
                 result.push(PONG);
+                result
             }
             TcpContract::Greeting {
                 name,
                 protocol_version,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(GREETING);
                 serialize_pascal_string(&mut result, name.as_str());
                 serialize_i32(&mut result, protocol_version);
+                result
             }
             TcpContract::Publish {
                 topic_id,
@@ -316,35 +320,41 @@ impl TcpContract {
                 persist_immediately,
                 data_to_publish,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PUBLISH);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_i64(&mut result, request_id);
                 serialize_list_of_arrays(&mut result, &data_to_publish);
                 serialize_bool(&mut result, persist_immediately);
+                result
             }
 
             TcpContract::PublishResponse { request_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PUBLISH_RESPONSE);
                 serialize_i64(&mut result, request_id);
+                result
             }
             TcpContract::Subscribe {
                 topic_id,
                 queue_id,
                 queue_type,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(SUBSCRIBE);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());
                 serialize_byte(&mut result, queue_type.into_u8());
+                result
             }
             TcpContract::SubscribeResponse { topic_id, queue_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(SUBSCRIBE_RESPONSE);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());
+                result
             }
-            TcpContract::NewMessagesServerSide(payload) => {
-                return payload;
-            }
+            TcpContract::NewMessagesServerSide(payload) => payload,
             TcpContract::NewMessages {
                 topic_id: _,
                 queue_id: _,
@@ -360,14 +370,18 @@ impl TcpContract {
                 queue_id,
                 confirmation_id,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(ALL_MESSAGES_DELIVERED_CONFIRMATION);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());
                 serialize_i64(&mut result, confirmation_id);
+                result
             }
             TcpContract::CreateTopicIfNotExists { topic_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(CREATE_TOPIC_IF_NOT_EXISTS);
                 serialize_pascal_string(&mut result, topic_id.as_str());
+                result
             }
             TcpContract::IntermediaryConfirm {
                 packet_version,
@@ -376,6 +390,7 @@ impl TcpContract {
                 confirmation_id,
                 delivered,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(INTERMEDIARY_CONFIRM);
                 result.push(packet_version);
                 serialize_pascal_string(&mut result, topic_id.as_str());
@@ -383,8 +398,10 @@ impl TcpContract {
                 serialize_i64(&mut result, confirmation_id);
 
                 super::common_serializers::serialize_queue_with_intervals(&mut result, &delivered);
+                result
             }
             TcpContract::PacketVersions { packet_versions } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PACKET_VERSIONS);
 
                 let data_len = packet_versions.len() as u8;
@@ -394,20 +411,25 @@ impl TcpContract {
                     serialize_byte(&mut result, kv.0);
                     serialize_i32(&mut result, kv.1);
                 }
+                result
             }
             TcpContract::Reject { message } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(REJECT);
                 serialize_pascal_string(&mut result, message.as_str());
+                result
             }
             TcpContract::AllMessagesConfirmedAsFail {
                 topic_id,
                 queue_id,
                 confirmation_id,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(ALL_MESSAGES_NOT_DELIVERED_CONFIRMATION);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_pascal_string(&mut result, queue_id.as_str());
                 serialize_i64(&mut result, confirmation_id);
+                result
             }
 
             TcpContract::ConfirmSomeMessagesAsOk {
@@ -417,6 +439,7 @@ impl TcpContract {
                 confirmation_id,
                 delivered,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(CONFIRM_SOME_MESSAGES_AS_OK);
                 result.push(packet_version);
                 serialize_pascal_string(&mut result, topic_id.as_str());
@@ -424,10 +447,9 @@ impl TcpContract {
                 serialize_i64(&mut result, confirmation_id);
 
                 super::common_serializers::serialize_queue_with_intervals(&mut result, &delivered);
+                result
             }
         }
-
-        return result;
     }
 }
 
