@@ -14,6 +14,12 @@ impl MySbTcpSerializer {
     pub fn new(attr: ConnectionAttributes) -> Self {
         Self { attr }
     }
+
+    pub fn get_new_messages_packet_version(&self) -> i32 {
+        self.attr
+            .versions
+            .get_packet_version(crate::tcp_message_id::NEW_MESSAGES)
+    }
 }
 
 #[async_trait]
