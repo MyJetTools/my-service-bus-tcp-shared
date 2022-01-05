@@ -96,6 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_basic_usecase() {
+        const PROTOCOL_VERSION: i32 = 2;
         let contents = vec![
             MySbMessageContent::new(1, vec![1, 1, 1], DateTimeAsMicroseconds::now()),
             MySbMessageContent::new(2, vec![2, 2, 2], DateTimeAsMicroseconds::now()),
@@ -108,11 +109,11 @@ mod tests {
 
         let tcp_contract = package_builder.build();
 
-        let payload = tcp_contract.serialize();
+        let payload = tcp_contract.serialize(PROTOCOL_VERSION);
 
         let mut socket_reader = SocketReaderMock::new();
 
-        let mut attr = ConnectionAttributes::new();
+        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
         let mut versions = HashMap::new();
         versions.insert(tcp_message_id::NEW_MESSAGES, 1);
         attr.versions.update(&versions);

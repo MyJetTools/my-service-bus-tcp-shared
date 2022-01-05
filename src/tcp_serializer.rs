@@ -25,7 +25,7 @@ impl MySbTcpSerializer {
 #[async_trait]
 impl TcpSocketSerializer<TcpContract> for MySbTcpSerializer {
     fn serialize(&self, contract: TcpContract) -> Vec<u8> {
-        contract.serialize()
+        contract.serialize(self.attr.protocol_version)
     }
     fn get_ping(&self) -> TcpContract {
         TcpContract::Ping

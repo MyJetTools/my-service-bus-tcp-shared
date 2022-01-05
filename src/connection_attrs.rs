@@ -13,10 +13,10 @@ pub struct ConnectionAttributes {
 }
 
 impl ConnectionAttributes {
-    pub fn new() -> Self {
+    pub fn new(protocol_version: i32) -> Self {
         Self {
             versions: PacketVersions::new(),
-            protocol_version: 0,
+            protocol_version: protocol_version,
         }
     }
 

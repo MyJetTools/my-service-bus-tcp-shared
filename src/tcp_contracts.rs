@@ -12,6 +12,12 @@ pub type RequestId = i64;
 pub type ConfirmationId = i64;
 
 #[derive(Debug)]
+pub struct MessageToPublishTcpContract {
+    pub headers: Option<HashMap<String, String>>,
+    pub content: Vec<u8>,
+}
+
+#[derive(Debug)]
 pub enum TcpContract {
     Ping,
     Pong,
@@ -23,7 +29,7 @@ pub enum TcpContract {
         topic_id: String,
         request_id: RequestId,
         persist_immediately: bool,
-        data_to_publish: Vec<Vec<u8>>,
+        data_to_publish: Vec<MessageToPublishTcpContract>,
     },
     PublishResponse {
         request_id: RequestId,
@@ -104,13 +110,28 @@ impl TcpContract {
                 let topic_id =
                     super::common_deserializers::read_pascal_string(socket_reader).await?;
                 let request_id = socket_reader.read_i64().await?;
+
                 let messages_count = socket_reader.read_i32().await? as usize;
 
-                let mut data_to_publish: Vec<Vec<u8>> = Vec::with_capacity(messages_count);
+                let mut data_to_publish: Vec<MessageToPublishTcpContract> =
+                    Vec::with_capacity(messages_count);
 
-                for _ in 0..messages_count {
-                    let byte_array = socket_reader.read_byte_array().await?;
-                    data_to_publish.push(byte_array);
+                if attr.protocol_version < 3 {
+                    for _ in 0..messages_count {
+                        let content = socket_reader.read_byte_array().await?;
+                        data_to_publish.push(MessageToPublishTcpContract {
+                            headers: None,
+                            content,
+                        });
+                    }
+                } else {
+                    for _ in 0..messages_count {
+                        let headers =
+                            super::common_deserializers::deserealize_message_headers(socket_reader)
+                                .await?;
+                        let content = socket_reader.read_byte_array().await?;
+                        data_to_publish.push(MessageToPublishTcpContract { headers, content });
+                    }
                 }
 
                 let result = TcpContract::Publish {
@@ -166,7 +187,11 @@ impl TcpContract {
                 let mut messages: Vec<TcpContractMessage> = Vec::with_capacity(records_len);
                 let packet_version = attr.get_packet_version(packet_no);
                 for _ in 0..records_len {
-                    let msg = TcpContractMessage::serialize(socket_reader, packet_version).await?;
+                    let msg = if attr.protocol_version < 3 {
+                        TcpContractMessage::deserialize(socket_reader, packet_version).await?
+                    } else {
+                        TcpContractMessage::deserialize_v3(socket_reader).await?
+                    };
                     messages.push(msg);
                 }
 
@@ -292,7 +317,7 @@ impl TcpContract {
         return result;
     }
 
-    pub fn serialize(self) -> Vec<u8> {
+    pub fn serialize(self, protocol_version: i32) -> Vec<u8> {
         match self {
             TcpContract::Ping {} => {
                 let mut result: Vec<u8> = Vec::with_capacity(1);
@@ -324,7 +349,12 @@ impl TcpContract {
                 result.push(PUBLISH);
                 serialize_pascal_string(&mut result, topic_id.as_str());
                 serialize_i64(&mut result, request_id);
-                serialize_list_of_arrays(&mut result, &data_to_publish);
+                if protocol_version < 3 {
+                    serialize_messages_v2(&mut result, &data_to_publish);
+                } else {
+                    serialize_messages_v3(&mut result, &data_to_publish);
+                }
+
                 serialize_bool(&mut result, persist_immediately);
                 result
             }
@@ -465,8 +495,8 @@ mod tests {
         let tcp_packet = TcpContract::Ping;
 
         let mut socket_reader = SocketReaderMock::new();
-        let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let attr = ConnectionAttributes::new(0);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(2);
 
         socket_reader.push(&serialized_data);
 
@@ -487,8 +517,8 @@ mod tests {
         let tcp_packet = TcpContract::Pong;
 
         let mut socket_reader = SocketReaderMock::new();
-        let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let attr = ConnectionAttributes::new(0);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(2);
 
         socket_reader.push(&serialized_data);
 
@@ -507,7 +537,7 @@ mod tests {
     #[tokio::test]
     async fn test_greeting_packet() {
         let test_app_name = "testtttt";
-        let test_protocol_version = 255;
+        let test_protocol_version = 2;
 
         let tcp_packet = TcpContract::Greeting {
             name: test_app_name.to_string(),
@@ -516,9 +546,9 @@ mod tests {
 
         let mut socket_reader = SocketReaderMock::new();
 
-        let attr = ConnectionAttributes::new();
+        let attr = ConnectionAttributes::new(0);
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(0);
 
         socket_reader.push(&serialized_data);
 
@@ -541,9 +571,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_publish_packet() {
+    async fn test_publish_packet_v2() {
+        const PROTOCOL_VERSION: i32 = 2;
+
         let request_id_test = 1;
-        let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
+
+        let message_to_publish = MessageToPublishTcpContract {
+            content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            headers: None,
+        };
+
+        let data_test = vec![message_to_publish];
         let topic_test = String::from("test-topic");
         let persist_test = true;
 
@@ -556,9 +594,9 @@ mod tests {
 
         let mut socket_reader = SocketReaderMock::new();
 
-        let attr = ConnectionAttributes::new();
+        let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
 
         socket_reader.push(&serialized_data);
 
@@ -579,8 +617,8 @@ mod tests {
 
                 let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
 
-                for index in 0..data_to_publish[0].len() {
-                    assert_eq!(data_test[0][index], data_to_publish[0][index]);
+                for index in 0..data_to_publish[0].content.len() {
+                    assert_eq!(data_test[0][index], data_to_publish[0].content[index]);
                 }
             }
             _ => {
@@ -590,7 +628,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_publish_packet_v3() {
+        const PROTOCOL_VERSION: i32 = 3;
+
+        let request_id_test = 1;
+
+        let mut headers = HashMap::new();
+        headers.insert("key1".to_string(), "value1".to_string());
+        headers.insert("key2".to_string(), "value2".to_string());
+
+        let message_to_publish = MessageToPublishTcpContract {
+            content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            headers: Some(headers),
+        };
+
+        let data_test = vec![message_to_publish];
+        let topic_test = String::from("test-topic");
+        let persist_test = true;
+
+        let tcp_packet = TcpContract::Publish {
+            data_to_publish: data_test,
+            persist_immediately: persist_test,
+            request_id: request_id_test,
+            topic_id: topic_test,
+        };
+
+        let mut socket_reader = SocketReaderMock::new();
+
+        let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+
+        let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
+
+        socket_reader.push(&serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Publish {
+                mut data_to_publish,
+                persist_immediately,
+                request_id,
+                topic_id,
+            } => {
+                assert_eq!(request_id_test, request_id);
+                assert_eq!(String::from("test-topic"), topic_id);
+                assert_eq!(persist_test, persist_immediately);
+
+                let data_test = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+
+                assert_eq!(1, data_to_publish.len());
+
+                let el0 = data_to_publish.remove(0);
+
+                let mut headers = el0.headers.unwrap();
+
+                assert_eq!(data_test, el0.content);
+                assert_eq!(2, headers.len());
+
+                assert_eq!("value1", headers.remove("key1").unwrap());
+                assert_eq!("value2", headers.remove("key2").unwrap());
+            }
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_publish_response_packet() {
+        const PROTOCOL_VERSION: i32 = 2;
+
         let request_id_test = 1;
 
         let tcp_packet = TcpContract::PublishResponse {
@@ -599,9 +708,10 @@ mod tests {
 
         let mut socket_reader = SocketReaderMock::new();
 
-        let attr = ConnectionAttributes::new();
+        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        attr.protocol_version = PROTOCOL_VERSION;
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
         socket_reader.push(&serialized_data);
 
@@ -621,6 +731,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_packet() {
+        const PROTOCOL_VERSION: i32 = 2;
         let queue_id_test = String::from("queue");
         let topic_id_test = String::from("topic");
         let queue_type_test = TopicQueueType::PermanentWithSingleConnection;
@@ -633,9 +744,10 @@ mod tests {
 
         let mut socket_reader = SocketReaderMock::new();
 
-        let attr = ConnectionAttributes::new();
+        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        attr.protocol_version = PROTOCOL_VERSION;
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
         socket_reader.push(&serialized_data);
 

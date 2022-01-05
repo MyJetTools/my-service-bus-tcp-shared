@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use my_service_bus_shared::queue_with_intervals::QueueIndexRange;
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
@@ -29,4 +31,25 @@ pub async fn read_queue_with_intervals<T: SocketReader>(
     }
 
     Ok(result)
+}
+
+pub async fn deserealize_message_headers<T: SocketReader>(
+    reader: &mut T,
+) -> Result<Option<HashMap<String, String>>, ReadingTcpContractFail> {
+    let headers_count = reader.read_byte().await? as usize;
+
+    if headers_count == 0 {
+        return Ok(None);
+    }
+
+    let mut result = HashMap::with_capacity(headers_count);
+
+    for _ in 0..headers_count {
+        let key = read_pascal_string(reader).await?;
+        let value = read_pascal_string(reader).await?;
+
+        result.insert(key, value);
+    }
+
+    Ok(Some(result))
 }
