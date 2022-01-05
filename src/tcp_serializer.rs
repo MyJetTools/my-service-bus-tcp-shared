@@ -38,18 +38,20 @@ impl TcpSocketSerializer<TcpContract> for MySbTcpSerializer {
         Ok(result)
     }
 
-    fn apply_packet(&mut self, contract: &TcpContract) {
+    fn apply_packet(&mut self, contract: &TcpContract) -> bool {
         match contract {
             TcpContract::Greeting {
                 name: _,
                 protocol_version,
             } => {
                 self.attr.protocol_version = *protocol_version;
+                true
             }
             TcpContract::PacketVersions { packet_versions } => {
                 self.attr.versions.update(packet_versions);
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 }
