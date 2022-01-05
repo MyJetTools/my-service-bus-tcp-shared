@@ -98,8 +98,8 @@ mod tests {
     async fn test_basic_usecase() {
         const PROTOCOL_VERSION: i32 = 2;
         let contents = vec![
-            MySbMessageContent::new(1, vec![1, 1, 1], DateTimeAsMicroseconds::now()),
-            MySbMessageContent::new(2, vec![2, 2, 2], DateTimeAsMicroseconds::now()),
+            MySbMessageContent::new(1, vec![1, 1, 1], None, DateTimeAsMicroseconds::now()),
+            MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now()),
         ];
 
         let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1);
