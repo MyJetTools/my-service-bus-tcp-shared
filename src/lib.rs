@@ -15,5 +15,5 @@ pub use connection_attrs::{ConnectionAttributes, PacketProtVer};
 pub use delivery_package_builder::DeliveryPackageBuilder;
 pub use packet_versions::PacketVersions;
 pub use tcp_contract_message::TcpContractMessage;
-pub use tcp_contracts::TcpContract;
+pub use tcp_contracts::{MessageToPublishTcpContract, TcpContract};
 pub use tcp_serializer::MySbTcpSerializer;
