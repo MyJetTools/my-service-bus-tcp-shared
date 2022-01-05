@@ -27,8 +27,8 @@ impl TcpSocketSerializer<TcpContract> for MySbTcpSerializer {
     fn serialize(&self, contract: TcpContract) -> Vec<u8> {
         contract.serialize()
     }
-    fn get_ping_payload(&self) -> Vec<u8> {
-        TcpContract::Ping.serialize()
+    fn get_ping(&self) -> TcpContract {
+        TcpContract::Ping
     }
     async fn deserialize<TSocketReader: Send + Sync + 'static + SocketReader>(
         &mut self,
