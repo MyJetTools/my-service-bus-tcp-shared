@@ -6,24 +6,17 @@ pub struct DeliveryPackageBuilder<'s> {
     pub topic_id: &'s str,
     pub queue_id: &'s str,
     pub subscriber_id: i64,
-    pub version: PacketProtVer,
     pub messages: Vec<(&'s MySbMessageContent, i32)>,
     pub ids: QueueWithIntervals,
     pub payload_size: usize,
 }
 
 impl<'s> DeliveryPackageBuilder<'s> {
-    pub fn new(
-        topic_id: &'s str,
-        queue_id: &'s str,
-        subscriber_id: i64,
-        version: PacketProtVer,
-    ) -> Self {
+    pub fn new(topic_id: &'s str, queue_id: &'s str, subscriber_id: i64) -> Self {
         Self {
             topic_id,
             queue_id,
             subscriber_id,
-            version,
             messages: Vec::new(),
             ids: QueueWithIntervals::new(),
             payload_size: 0,
@@ -40,7 +33,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
         self.messages.len()
     }
 
-    pub fn build(&self) -> TcpContract {
+    pub fn build_tcp_contract(&self, version: PacketProtVer) -> TcpContract {
         let mut buffer = Vec::new();
 
         buffer.push(tcp_message_id::NEW_MESSAGES);
@@ -48,12 +41,12 @@ impl<'s> DeliveryPackageBuilder<'s> {
         pascal_string::serialize(&mut buffer, self.queue_id);
         i64::serialize(&mut buffer, self.subscriber_id);
 
-        self.serialize_messages(&mut buffer);
+        self.serialize_messages(&mut buffer, &version);
 
         TcpContract::NewMessagesServerSide(buffer)
     }
 
-    fn serialize_messages(&self, result: &mut Vec<u8>) {
+    fn serialize_messages(&self, result: &mut Vec<u8>, version: &PacketProtVer) {
         let messages_count = self.messages.len() as i32;
 
         i32::serialize(result, messages_count);
@@ -63,7 +56,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
                 result,
                 msg_content,
                 *attempt_no,
-                &self.version,
+                version,
             );
         }
     }
@@ -92,13 +85,12 @@ mod tests {
             MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now()),
         ];
 
-        let mut package_builder =
-            DeliveryPackageBuilder::new("test_topic", "test_queue", 15, version);
+        let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15);
 
         package_builder.add_message(contents.get(0).unwrap(), 1);
         package_builder.add_message(contents.get(1).unwrap(), 2);
 
-        let tcp_contract = package_builder.build();
+        let tcp_contract = package_builder.build_tcp_contract(version);
 
         let payload = tcp_contract.serialize(PROTOCOL_VERSION);
 
