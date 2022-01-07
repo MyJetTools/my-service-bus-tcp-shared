@@ -1,12 +1,13 @@
 use my_service_bus_shared::{queue_with_intervals::QueueWithIntervals, MySbMessageContent};
 
-use crate::{common_serializers::*, tcp_message_id, TcpContract};
+use crate::{tcp_message_id, tcp_serializers::*, TcpContract};
 
 pub struct DeliveryPackageBuilder<'s> {
     pub topic_id: &'s str,
     pub queue_id: &'s str,
     pub subscriber_id: i64,
     pub delivery_packet_version: i32,
+    protocol_version: i32,
     pub messages: Vec<(&'s MySbMessageContent, i32)>,
     pub ids: QueueWithIntervals,
     pub payload_size: usize,
@@ -18,6 +19,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
         queue_id: &'s str,
         subscriber_id: i64,
         delivery_packet_version: i32,
+        protocol_version: i32,
     ) -> Self {
         Self {
             topic_id,
@@ -27,6 +29,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
             messages: Vec::new(),
             ids: QueueWithIntervals::new(),
             payload_size: 0,
+            protocol_version,
         }
     }
 
@@ -44,9 +47,9 @@ impl<'s> DeliveryPackageBuilder<'s> {
         let mut buffer = Vec::new();
 
         buffer.push(tcp_message_id::NEW_MESSAGES);
-        serialize_pascal_string(&mut buffer, self.topic_id);
-        serialize_pascal_string(&mut buffer, self.queue_id);
-        serialize_i64(&mut buffer, self.subscriber_id);
+        pascal_string::serialize(&mut buffer, self.topic_id);
+        pascal_string::serialize(&mut buffer, self.queue_id);
+        i64::serialize(&mut buffer, self.subscriber_id);
 
         self.serialize_messages(&mut buffer);
 
@@ -56,31 +59,18 @@ impl<'s> DeliveryPackageBuilder<'s> {
     fn serialize_messages(&self, result: &mut Vec<u8>) {
         let messages_count = self.messages.len() as i32;
 
-        serialize_i32(result, messages_count);
+        i32::serialize(result, messages_count);
 
         for (msg_content, attempt_no) in &self.messages {
-            serialize_message(
+            crate::tcp_serializers::messages_to_deliver::serialize(
                 result,
                 msg_content,
                 *attempt_no,
+                self.protocol_version,
                 self.delivery_packet_version,
             );
         }
     }
-}
-
-fn serialize_message(
-    dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
-    attempt_no: i32,
-    packet_version: i32,
-) {
-    crate::common_serializers::serialize_i64(dest, msg.id);
-
-    if packet_version == 1 {
-        serialize_i32(dest, attempt_no);
-    }
-    serialize_byte_array(dest, msg.content.as_slice());
 }
 
 #[cfg(test)]
@@ -95,14 +85,15 @@ mod tests {
     use crate::ConnectionAttributes;
 
     #[tokio::test]
-    async fn test_basic_usecase() {
+    async fn test_basic_usecase_v2() {
         const PROTOCOL_VERSION: i32 = 2;
         let contents = vec![
             MySbMessageContent::new(1, vec![1, 1, 1], None, DateTimeAsMicroseconds::now()),
             MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now()),
         ];
 
-        let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1);
+        let mut package_builder =
+            DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1, PROTOCOL_VERSION);
 
         package_builder.add_message(contents.get(0).unwrap(), 1);
         package_builder.add_message(contents.get(1).unwrap(), 2);
