@@ -4,7 +4,7 @@ use my_tcp_sockets::{
     TcpSocketSerializer,
 };
 
-use crate::{ConnectionAttributes, TcpContract};
+use crate::{ConnectionAttributes, PacketProtVer, TcpContract};
 
 pub struct MySbTcpSerializer {
     attr: ConnectionAttributes,
@@ -15,10 +15,8 @@ impl MySbTcpSerializer {
         Self { attr }
     }
 
-    pub fn get_new_messages_packet_version(&self) -> i32 {
-        self.attr
-            .versions
-            .get_packet_version(crate::tcp_message_id::NEW_MESSAGES)
+    pub fn get_messages_to_deliver_packet_version(&self) -> PacketProtVer {
+        self.attr.get(crate::tcp_message_id::NEW_MESSAGES)
     }
 }
 
