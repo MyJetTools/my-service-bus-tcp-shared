@@ -196,12 +196,11 @@ impl TcpContract {
                 let records_len = socket_reader.read_i32().await? as usize;
 
                 let mut messages = Vec::with_capacity(records_len);
-                let packet_version = attr.get_packet_version(packet_no);
+                let version = attr.get(packet_no);
                 for _ in 0..records_len {
                     let msg = crate::tcp_serializers::messages_to_deliver::deserialize(
                         socket_reader,
-                        packet_version,
-                        attr.protocol_version,
+                        &version,
                     )
                     .await?;
                     messages.push(msg);

@@ -1,17 +1,16 @@
 use my_service_bus_shared::MySbMessageContent;
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
-use crate::MessageToDeliverTcpContract;
+use crate::{MessageToDeliverTcpContract, PacketProtVer};
 
 pub fn serialize(
     dest: &mut Vec<u8>,
     msg: &MySbMessageContent,
     attempt_no: i32,
-    protocol_version: i32,
-    packet_version: i32,
+    version: &PacketProtVer,
 ) {
-    if protocol_version < 3 {
-        serialize_v2(dest, msg, attempt_no, packet_version);
+    if version.protocol_version < 3 {
+        serialize_v2(dest, msg, attempt_no, version.packet_version);
     } else {
         serialize_v3(dest, msg, attempt_no);
     }
@@ -40,11 +39,10 @@ pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i3
 
 pub async fn deserialize<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
-    packet_version: i32,
-    protocol_version: i32,
+    version: &PacketProtVer,
 ) -> Result<MessageToDeliverTcpContract, ReadingTcpContractFail> {
-    if protocol_version < 3 {
-        return deserialize_v2(socket_reader, packet_version).await;
+    if version.protocol_version < 3 {
+        return deserialize_v2(socket_reader, version.packet_version).await;
     }
 
     return deserialize_v3(socket_reader).await;
@@ -103,10 +101,14 @@ mod test {
     use my_tcp_sockets::socket_reader::SocketReaderMock;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
+    use crate::PacketProtVer;
+
     #[tokio::test]
     pub async fn test_v2() {
-        const PROTOCOL_VERSION: i32 = 1;
-        const PACKET_VERSION: i32 = 2;
+        let version = PacketProtVer {
+            protocol_version: 2,
+            packet_version: 1,
+        };
 
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
@@ -120,18 +122,12 @@ mod test {
 
         let mut serialized_data = Vec::new();
 
-        super::serialize(
-            &mut serialized_data,
-            &src_msg,
-            1,
-            PROTOCOL_VERSION,
-            PACKET_VERSION,
-        );
+        super::serialize(&mut serialized_data, &src_msg, 1, &version);
 
         let mut socket_reader = SocketReaderMock::new();
         socket_reader.push(serialized_data.as_slice());
 
-        let result = super::deserialize(&mut socket_reader, PACKET_VERSION, PROTOCOL_VERSION)
+        let result = super::deserialize(&mut socket_reader, &version)
             .await
             .unwrap();
 
@@ -142,8 +138,10 @@ mod test {
 
     #[tokio::test]
     pub async fn test_v3() {
-        const PROTOCOL_VERSION: i32 = 3;
-        const PACKET_VERSION: i32 = 2;
+        let version = PacketProtVer {
+            protocol_version: 3,
+            packet_version: 1,
+        };
 
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
@@ -157,18 +155,12 @@ mod test {
 
         let mut serialized_data = Vec::new();
 
-        super::serialize(
-            &mut serialized_data,
-            &src_msg,
-            1,
-            PROTOCOL_VERSION,
-            PACKET_VERSION,
-        );
+        super::serialize(&mut serialized_data, &src_msg, 1, &version);
 
         let mut socket_reader = SocketReaderMock::new();
         socket_reader.push(serialized_data.as_slice());
 
-        let result = super::deserialize(&mut socket_reader, PACKET_VERSION, PROTOCOL_VERSION)
+        let result = super::deserialize(&mut socket_reader, &version)
             .await
             .unwrap();
 

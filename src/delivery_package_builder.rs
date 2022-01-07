@@ -1,13 +1,12 @@
 use my_service_bus_shared::{queue_with_intervals::QueueWithIntervals, MySbMessageContent};
 
-use crate::{tcp_message_id, tcp_serializers::*, TcpContract};
+use crate::{tcp_message_id, tcp_serializers::*, PacketProtVer, TcpContract};
 
 pub struct DeliveryPackageBuilder<'s> {
     pub topic_id: &'s str,
     pub queue_id: &'s str,
     pub subscriber_id: i64,
-    pub delivery_packet_version: i32,
-    protocol_version: i32,
+    pub version: PacketProtVer,
     pub messages: Vec<(&'s MySbMessageContent, i32)>,
     pub ids: QueueWithIntervals,
     pub payload_size: usize,
@@ -18,18 +17,16 @@ impl<'s> DeliveryPackageBuilder<'s> {
         topic_id: &'s str,
         queue_id: &'s str,
         subscriber_id: i64,
-        delivery_packet_version: i32,
-        protocol_version: i32,
+        version: PacketProtVer,
     ) -> Self {
         Self {
             topic_id,
             queue_id,
             subscriber_id,
-            delivery_packet_version,
+            version,
             messages: Vec::new(),
             ids: QueueWithIntervals::new(),
             payload_size: 0,
-            protocol_version,
         }
     }
 
@@ -66,8 +63,7 @@ impl<'s> DeliveryPackageBuilder<'s> {
                 result,
                 msg_content,
                 *attempt_no,
-                self.protocol_version,
-                self.delivery_packet_version,
+                &self.version,
             );
         }
     }
@@ -86,6 +82,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_basic_usecase_v2() {
+        let version = PacketProtVer {
+            packet_version: 1,
+            protocol_version: 2,
+        };
         const PROTOCOL_VERSION: i32 = 2;
         let contents = vec![
             MySbMessageContent::new(1, vec![1, 1, 1], None, DateTimeAsMicroseconds::now()),
@@ -93,7 +93,7 @@ mod tests {
         ];
 
         let mut package_builder =
-            DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1, PROTOCOL_VERSION);
+            DeliveryPackageBuilder::new("test_topic", "test_queue", 15, version);
 
         package_builder.add_message(contents.get(0).unwrap(), 1);
         package_builder.add_message(contents.get(1).unwrap(), 2);
