@@ -13,7 +13,7 @@ pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageToPublishTcpContract {
     pub headers: Option<HashMap<String, String>>,
     pub content: Vec<u8>,
@@ -27,7 +27,7 @@ pub struct MessageToDeliverTcpContract {
     pub content: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TcpContract {
     Ping,
     Pong,

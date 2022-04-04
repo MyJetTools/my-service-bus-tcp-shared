@@ -52,4 +52,9 @@ impl TcpSocketSerializer<TcpContract> for MySbTcpSerializer {
             _ => false,
         }
     }
+
+    fn serialize_ref(&self, contract: &TcpContract) -> Vec<u8> {
+        let contract = contract.clone();
+        contract.serialize(self.attr.protocol_version)
+    }
 }
