@@ -1,4 +1,6 @@
-use crate::{tcp_message_id, tcp_serializers::*};
+use std::collections::HashMap;
+
+use crate::{tcp_message_id, tcp_serializers::*, PacketProtVer};
 
 pub fn init_delivery_package(
     payload: &mut Vec<u8>,
@@ -33,11 +35,10 @@ mod tests {
     use std::collections::HashMap;
 
     use my_service_bus_shared::MySbMessageContent;
-    use my_tcp_sockets::socket_reader::SocketReaderMock;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use super::*;
-    use crate::{ConnectionAttributes, PacketProtVer, TcpContract};
+    use crate::{PacketProtVer, TcpContract};
 
     #[tokio::test]
     async fn test_basic_usecase_v2() {
@@ -71,19 +72,7 @@ mod tests {
 
         let tcp_contract = TcpContract::Raw(payload);
 
-        let payload = tcp_contract.serialize(PROTOCOL_VERSION);
-
-        let mut socket_reader = SocketReaderMock::new();
-
-        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
-        let mut versions = HashMap::new();
-        versions.insert(tcp_message_id::NEW_MESSAGES, 1);
-        attr.versions.update(&versions);
-        socket_reader.push(&payload);
-
-        let result = TcpContract::deserialize(&mut socket_reader, &attr)
-            .await
-            .unwrap();
+        let result = convert_from_raw(&tcp_contract, &version).await;
 
         if let TcpContract::NewMessages {
             topic_id,
@@ -145,19 +134,7 @@ mod tests {
 
         let tcp_contract = TcpContract::Raw(payload);
 
-        let payload = tcp_contract.serialize(PROTOCOL_VERSION);
-
-        let mut socket_reader = SocketReaderMock::new();
-
-        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
-        let mut versions = HashMap::new();
-        versions.insert(tcp_message_id::NEW_MESSAGES, 1);
-        attr.versions.update(&versions);
-        socket_reader.push(&payload);
-
-        let result = TcpContract::deserialize(&mut socket_reader, &attr)
-            .await
-            .unwrap();
+        let result = convert_from_raw(&tcp_contract, &version).await;
 
         if let TcpContract::NewMessages {
             topic_id,
