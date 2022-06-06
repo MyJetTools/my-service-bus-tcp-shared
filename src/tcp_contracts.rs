@@ -53,7 +53,7 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
     },
-    NewMessagesServerSide(Vec<u8>),
+    Raw(Vec<u8>),
     NewMessages {
         topic_id: String,
         queue_id: String,
@@ -397,7 +397,7 @@ impl TcpContract {
                 crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
                 result
             }
-            TcpContract::NewMessagesServerSide(payload) => payload,
+            TcpContract::Raw(payload) => payload,
             TcpContract::NewMessages {
                 topic_id: _,
                 queue_id: _,

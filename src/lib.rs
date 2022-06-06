@@ -1,4 +1,4 @@
-mod delivery_package_builder;
+pub mod delivery_package_builder;
 pub mod tcp_contract_to_string;
 pub mod tcp_message_id;
 pub mod tcp_serializers;
@@ -10,7 +10,7 @@ mod tcp_contracts;
 mod tcp_serializer;
 
 pub use connection_attrs::{ConnectionAttributes, PacketProtVer};
-pub use delivery_package_builder::DeliveryPackageBuilder;
+
 pub use packet_versions::PacketVersions;
 pub use tcp_contracts::{MessageToDeliverTcpContract, MessageToPublishTcpContract, TcpContract};
 pub use tcp_serializer::MySbTcpSerializer;
