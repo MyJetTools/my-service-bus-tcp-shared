@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::{tcp_message_id, tcp_serializers::*, PacketProtVer};
+use crate::{tcp_message_id, tcp_serializers::*};
 
 pub fn init_delivery_package(
     payload: &mut Vec<u8>,

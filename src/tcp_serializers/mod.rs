@@ -1,3 +1,5 @@
+mod convert_from_raw;
+
 pub mod bool;
 pub mod byte;
 pub mod byte_array;
@@ -10,3 +12,4 @@ pub mod messages_to_deliver;
 pub mod messages_to_publish;
 pub mod pascal_string;
 pub mod queue_with_intervals;
+pub use convert_from_raw::convert_from_raw;
