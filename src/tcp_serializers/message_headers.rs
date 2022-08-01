@@ -57,7 +57,7 @@ pub fn serialize(data: &mut Vec<u8>, headers: Option<&HashMap<String, String>>) 
 mod test {
     use std::collections::HashMap;
 
-    use my_tcp_sockets::socket_reader::SocketReaderMock;
+    use my_tcp_sockets::socket_reader::SocketReaderInMem;
 
     #[tokio::test]
     pub async fn test_headers() {
@@ -68,8 +68,7 @@ mod test {
 
         super::serialize(&mut serialized_data, Some(&headers));
 
-        let mut socket_reader = SocketReaderMock::new();
-        socket_reader.push(serialized_data.as_slice());
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = super::deserialize(&mut socket_reader).await.unwrap();
 
@@ -84,8 +83,7 @@ mod test {
 
         super::serialize(&mut serialized_data, Some(&headers));
 
-        let mut socket_reader = SocketReaderMock::new();
-        socket_reader.push(serialized_data.as_slice());
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = super::deserialize(&mut socket_reader).await.unwrap();
         assert_eq!(true, result.is_none());

@@ -98,7 +98,7 @@ mod test {
     use std::collections::HashMap;
 
     use my_service_bus_shared::MySbMessageContent;
-    use my_tcp_sockets::socket_reader::SocketReaderMock;
+    use my_tcp_sockets::socket_reader::SocketReaderInMem;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use crate::PacketProtVer;
@@ -124,8 +124,7 @@ mod test {
 
         super::serialize(&mut serialized_data, &src_msg, 1, &version);
 
-        let mut socket_reader = SocketReaderMock::new();
-        socket_reader.push(serialized_data.as_slice());
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = super::deserialize(&mut socket_reader, &version)
             .await
@@ -157,8 +156,7 @@ mod test {
 
         super::serialize(&mut serialized_data, &src_msg, 1, &version);
 
-        let mut socket_reader = SocketReaderMock::new();
-        socket_reader.push(serialized_data.as_slice());
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = super::deserialize(&mut socket_reader, &version)
             .await

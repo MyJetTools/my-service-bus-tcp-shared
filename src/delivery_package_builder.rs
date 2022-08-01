@@ -70,7 +70,7 @@ mod tests {
 
         let tcp_contract = TcpContract::Raw(payload);
 
-        let result = convert_from_raw(&tcp_contract, &version).await;
+        let result = convert_from_raw(tcp_contract, &version).await;
 
         if let TcpContract::NewMessages {
             topic_id,
@@ -132,7 +132,7 @@ mod tests {
 
         let tcp_contract = TcpContract::Raw(payload);
 
-        let result = convert_from_raw(&tcp_contract, &version).await;
+        let result = convert_from_raw(tcp_contract, &version).await;
 
         if let TcpContract::NewMessages {
             topic_id,

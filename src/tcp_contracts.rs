@@ -498,7 +498,7 @@ impl TcpContract {
 #[cfg(test)]
 mod tests {
 
-    use my_tcp_sockets::socket_reader::SocketReaderMock;
+    use my_tcp_sockets::socket_reader::SocketReaderInMem;
 
     use super::*;
 
@@ -506,11 +506,10 @@ mod tests {
     async fn test_ping_packet() {
         let tcp_packet = TcpContract::Ping;
 
-        let mut socket_reader = SocketReaderMock::new();
-        let attr = ConnectionAttributes::new(0);
         let serialized_data: Vec<u8> = tcp_packet.serialize(2);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
+        let attr = ConnectionAttributes::new(0);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -528,11 +527,9 @@ mod tests {
     async fn test_pong_packet() {
         let tcp_packet = TcpContract::Pong;
 
-        let mut socket_reader = SocketReaderMock::new();
-        let attr = ConnectionAttributes::new(0);
         let serialized_data: Vec<u8> = tcp_packet.serialize(2);
-
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
+        let attr = ConnectionAttributes::new(0);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -555,14 +552,10 @@ mod tests {
             name: test_app_name.to_string(),
             protocol_version: test_protocol_version,
         };
-
-        let mut socket_reader = SocketReaderMock::new();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(0);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let attr = ConnectionAttributes::new(0);
-
-        let serialized_data: Vec<u8> = tcp_packet.serialize(0);
-
-        socket_reader.push(&serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -603,14 +596,10 @@ mod tests {
             request_id: request_id_test,
             topic_id: topic_test,
         };
-
-        let mut socket_reader = SocketReaderMock::new();
-
         let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
-
         let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -665,13 +654,10 @@ mod tests {
             topic_id: topic_test,
         };
 
-        let mut socket_reader = SocketReaderMock::new();
-
         let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
-
         let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -718,14 +704,12 @@ mod tests {
             request_id: request_id_test,
         };
 
-        let mut socket_reader = SocketReaderMock::new();
-
         let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
         attr.protocol_version = PROTOCOL_VERSION;
 
         let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -754,12 +738,10 @@ mod tests {
             queue_type: queue_type_test,
         };
 
-        let mut socket_reader = SocketReaderMock::new();
         let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
-
         let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
