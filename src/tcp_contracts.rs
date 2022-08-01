@@ -495,6 +495,15 @@ impl TcpContract {
     }
 }
 
+impl my_tcp_sockets::tcp_connection::TcpContract for TcpContract {
+    fn is_pong(&self) -> bool {
+        if let TcpContract::Pong = self {
+            return true;
+        }
+
+        false
+    }
+}
 #[cfg(test)]
 mod tests {
 
