@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 my-service-bus-shared = { branch = "0.2.3", git = "https://github.com/MyJetTools/my-service-bus-shared.git" }
-my-tcp-sockets = { branch = "0.1.6", git = "https://github.com/MyJetTools/my-tcp-sockets.git" }
+my-tcp-sockets = { branch = "0.1.6", git = "https://github.com/MyJetTools/my-tcp-sockets.git", features = [
+    "statefull_serializer",
+    "serialize_as_ref",
+] }
 rust-extensions = { branch = "0.1.1", git = "https://github.com/MyJetTools/rust-extensions.git" }
 
 tokio = { version = "*", features = ["full"] }
