@@ -1,86 +1,30 @@
-use my_service_bus_shared::{queue_with_intervals::QueueWithIntervals, MySbMessageContent};
+use crate::{tcp_message_id, tcp_serializers::*};
 
-use crate::{common_serializers::*, tcp_message_id, TcpContract};
+pub fn init_delivery_package(
+    payload: &mut Vec<u8>,
+    topic_id: &str,
+    queue_id: &str,
+    subscriber_id: i64,
+) -> usize {
+    payload.push(tcp_message_id::NEW_MESSAGES);
+    pascal_string::serialize(payload, topic_id);
+    pascal_string::serialize(payload, queue_id);
+    i64::serialize(payload, subscriber_id);
 
-pub struct DeliveryPackageBuilder<'s> {
-    pub topic_id: &'s str,
-    pub queue_id: &'s str,
-    pub subscriber_id: i64,
-    pub delivery_packet_version: i32,
-    pub messages: Vec<(&'s MySbMessageContent, i32)>,
-    pub ids: QueueWithIntervals,
-    pub payload_size: usize,
+    let amount_offset = payload.len();
+    i32::serialize(payload, 0);
+
+    amount_offset
 }
 
-impl<'s> DeliveryPackageBuilder<'s> {
-    pub fn new(
-        topic_id: &'s str,
-        queue_id: &'s str,
-        subscriber_id: i64,
-        delivery_packet_version: i32,
-    ) -> Self {
-        Self {
-            topic_id,
-            queue_id,
-            subscriber_id,
-            delivery_packet_version,
-            messages: Vec::new(),
-            ids: QueueWithIntervals::new(),
-            payload_size: 0,
-        }
-    }
-
-    pub fn add_message(&mut self, msg: &'s MySbMessageContent, attempt_no: i32) {
-        self.payload_size += msg.content.len();
-        self.messages.push((msg, attempt_no));
-        self.ids.enqueue(msg.id);
-    }
-
-    pub fn len(&self) -> usize {
-        self.messages.len()
-    }
-
-    pub fn build(&self) -> TcpContract {
-        let mut buffer = Vec::new();
-
-        buffer.push(tcp_message_id::NEW_MESSAGES);
-        serialize_pascal_string(&mut buffer, self.topic_id);
-        serialize_pascal_string(&mut buffer, self.queue_id);
-        serialize_i64(&mut buffer, self.subscriber_id);
-
-        self.serialize_messages(&mut buffer);
-
-        TcpContract::NewMessagesServerSide(buffer)
-    }
-
-    fn serialize_messages(&self, result: &mut Vec<u8>) {
-        let messages_count = self.messages.len() as i32;
-
-        serialize_i32(result, messages_count);
-
-        for (msg_content, attempt_no) in &self.messages {
-            serialize_message(
-                result,
-                msg_content,
-                *attempt_no,
-                self.delivery_packet_version,
-            );
-        }
-    }
-}
-
-fn serialize_message(
-    dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
-    attempt_no: i32,
-    packet_version: i32,
+pub fn update_amount_of_messages(
+    payload: &mut Vec<u8>,
+    messages_count_position: usize,
+    amount: i32,
 ) {
-    crate::common_serializers::serialize_i64(dest, msg.id);
-
-    if packet_version == 1 {
-        serialize_i32(dest, attempt_no);
-    }
-    serialize_byte_array(dest, msg.content.as_slice());
+    let size = amount.to_le_bytes();
+    let dest = &mut payload[messages_count_position..messages_count_position + 4];
+    dest.copy_from_slice(size.as_slice());
 }
 
 #[cfg(test)]
@@ -88,38 +32,45 @@ mod tests {
 
     use std::collections::HashMap;
 
+    use my_service_bus_shared::MySbMessageContent;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use super::*;
-    use crate::{test_utils::DataReaderMock, ConnectionAttributes};
+    use crate::{PacketProtVer, TcpContract};
 
     #[tokio::test]
-    async fn test_basic_usecase() {
-        let contents = vec![
-            MySbMessageContent::new(1, vec![1, 1, 1], DateTimeAsMicroseconds::now()),
-            MySbMessageContent::new(2, vec![2, 2, 2], DateTimeAsMicroseconds::now()),
-        ];
+    async fn test_basic_usecase_v2() {
+        const PROTOCOL_VERSION: i32 = 2;
 
-        let mut package_builder = DeliveryPackageBuilder::new("test_topic", "test_queue", 15, 1);
+        let version = PacketProtVer {
+            packet_version: 1,
+            protocol_version: PROTOCOL_VERSION,
+        };
 
-        package_builder.add_message(contents.get(0).unwrap(), 1);
-        package_builder.add_message(contents.get(1).unwrap(), 2);
+        let mut headers = HashMap::new();
+        headers.insert("1".to_string(), "1".to_string());
+        headers.insert("2".to_string(), "2".to_string());
 
-        let tcp_contract = package_builder.build();
+        let msg1 = MySbMessageContent::new(
+            1,
+            vec![1, 1, 1],
+            Some(headers),
+            DateTimeAsMicroseconds::now(),
+        );
+        let msg2 = MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now());
 
-        let payload = tcp_contract.serialize();
+        let mut payload = Vec::new();
 
-        let mut socket_reader = DataReaderMock::new();
+        let amount_position = init_delivery_package(&mut payload, "test_topic", "test_queue", 15);
 
-        let mut attr = ConnectionAttributes::new();
-        let mut versions = HashMap::new();
-        versions.insert(tcp_message_id::NEW_MESSAGES, 1);
-        attr.versions.update(&versions);
-        socket_reader.push(&payload);
+        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg1, 1, &version);
+        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg2, 2, &version);
 
-        let result = TcpContract::deserialize(&mut socket_reader, &attr)
-            .await
-            .unwrap();
+        update_amount_of_messages(&mut payload, amount_position, 2);
+
+        let tcp_contract = TcpContract::Raw(payload);
+
+        let result = convert_from_raw(tcp_contract, &version).await;
 
         if let TcpContract::NewMessages {
             topic_id,
@@ -133,10 +84,79 @@ mod tests {
             assert_eq!(15, confirmation_id);
             assert_eq!(2, messages.len());
 
-            let msg1 = messages.remove(0);
+            let result_msg1 = messages.remove(0);
 
-            assert_eq!(1, msg1.attempt_no);
-            assert_eq!(vec![1, 1, 1], msg1.content);
+            assert_eq!(1, result_msg1.attempt_no);
+            assert_eq!(msg1.content, result_msg1.content);
+            assert_eq!(true, result_msg1.headers.is_none());
+
+            let result_msg2 = messages.remove(0);
+
+            assert_eq!(2, result_msg2.attempt_no);
+            assert_eq!(msg2.content, result_msg2.content);
+            assert_eq!(true, result_msg2.headers.is_none());
+        } else {
+            panic!("We should not be ere")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_basic_usecase_v3() {
+        const PROTOCOL_VERSION: i32 = 3;
+
+        let version = PacketProtVer {
+            packet_version: 1,
+            protocol_version: PROTOCOL_VERSION,
+        };
+
+        let mut headers = HashMap::new();
+        headers.insert("1".to_string(), "1".to_string());
+        headers.insert("2".to_string(), "2".to_string());
+
+        let msg1 = MySbMessageContent::new(
+            1,
+            vec![1, 1, 1],
+            Some(headers),
+            DateTimeAsMicroseconds::now(),
+        );
+        let msg2 = MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now());
+
+        let mut payload = Vec::new();
+
+        let amount_position = init_delivery_package(&mut payload, "test_topic", "test_queue", 15);
+
+        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg1, 1, &version);
+        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg2, 2, &version);
+
+        update_amount_of_messages(&mut payload, amount_position, 2);
+
+        let tcp_contract = TcpContract::Raw(payload);
+
+        let result = convert_from_raw(tcp_contract, &version).await;
+
+        if let TcpContract::NewMessages {
+            topic_id,
+            queue_id,
+            confirmation_id,
+            mut messages,
+        } = result
+        {
+            assert_eq!("test_topic", topic_id);
+            assert_eq!("test_queue", queue_id);
+            assert_eq!(15, confirmation_id);
+            assert_eq!(2, messages.len());
+
+            let result_msg1 = messages.remove(0);
+
+            assert_eq!(1, result_msg1.attempt_no);
+            assert_eq!(msg1.content, result_msg1.content);
+            assert_eq!(2, result_msg1.headers.unwrap().len());
+
+            let result_msg2 = messages.remove(0);
+
+            assert_eq!(2, result_msg2.attempt_no);
+            assert_eq!(msg2.content, result_msg2.content);
+            assert_eq!(true, result_msg2.headers.is_none());
         } else {
             panic!("We should not be ere")
         }

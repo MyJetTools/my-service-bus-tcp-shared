@@ -1,8 +1,11 @@
-use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
+use my_service_bus_shared::{
+    queue::TopicQueueType, queue_with_intervals::QueueIndexRange, MessageId,
+};
+use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
-use crate::{ConnectionAttributes, TcpContractMessage};
+use crate::ConnectionAttributes;
 
-use super::{common_serializers::*, tcp_message_id::*, ReadingTcpContractFail, TSocketReader};
+use super::tcp_message_id::*;
 
 use std::collections::HashMap;
 
@@ -10,7 +13,21 @@ pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct MessageToPublishTcpContract {
+    pub headers: Option<HashMap<String, String>>,
+    pub content: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageToDeliverTcpContract {
+    pub id: MessageId,
+    pub attempt_no: i32,
+    pub headers: Option<HashMap<String, String>>,
+    pub content: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
 pub enum TcpContract {
     Ping,
     Pong,
@@ -22,7 +39,7 @@ pub enum TcpContract {
         topic_id: String,
         request_id: RequestId,
         persist_immediately: bool,
-        data_to_publish: Vec<Vec<u8>>,
+        data_to_publish: Vec<MessageToPublishTcpContract>,
     },
     PublishResponse {
         request_id: RequestId,
@@ -36,12 +53,12 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
     },
-    NewMessagesServerSide(Vec<u8>),
+    Raw(Vec<u8>),
     NewMessages {
         topic_id: String,
         queue_id: String,
         confirmation_id: i64,
-        messages: Vec<TcpContractMessage>,
+        messages: Vec<MessageToDeliverTcpContract>,
     },
     NewMessagesConfirmation {
         topic_id: String,
@@ -80,8 +97,8 @@ pub enum TcpContract {
 }
 
 impl TcpContract {
-    pub async fn deserialize<T: TSocketReader>(
-        socket_reader: &mut T,
+    pub async fn deserialize<TSocketReader: SocketReader>(
+        socket_reader: &mut TSocketReader,
         attr: &ConnectionAttributes,
     ) -> Result<TcpContract, ReadingTcpContractFail> {
         let packet_no = socket_reader.read_byte().await?;
@@ -90,7 +107,8 @@ impl TcpContract {
             PING => Ok(TcpContract::Ping {}),
             PONG => Ok(TcpContract::Pong {}),
             GREETING => {
-                let name = super::common_deserializers::read_pascal_string(socket_reader).await?;
+                let name =
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let protocol_version = socket_reader.read_i32().await?;
 
                 let result = TcpContract::Greeting {
@@ -101,15 +119,30 @@ impl TcpContract {
             }
             PUBLISH => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let request_id = socket_reader.read_i64().await?;
+
                 let messages_count = socket_reader.read_i32().await? as usize;
 
-                let mut data_to_publish: Vec<Vec<u8>> = Vec::with_capacity(messages_count);
+                let mut data_to_publish: Vec<MessageToPublishTcpContract> =
+                    Vec::with_capacity(messages_count);
 
-                for _ in 0..messages_count {
-                    let byte_array = socket_reader.read_byte_array().await?;
-                    data_to_publish.push(byte_array);
+                if attr.protocol_version < 3 {
+                    for _ in 0..messages_count {
+                        let content = socket_reader.read_byte_array().await?;
+                        data_to_publish.push(MessageToPublishTcpContract {
+                            headers: None,
+                            content,
+                        });
+                    }
+                } else {
+                    for _ in 0..messages_count {
+                        let headers =
+                            crate::tcp_serializers::message_headers::deserialize(socket_reader)
+                                .await?;
+                        let content = socket_reader.read_byte_array().await?;
+                        data_to_publish.push(MessageToPublishTcpContract { headers, content });
+                    }
                 }
 
                 let result = TcpContract::Publish {
@@ -128,9 +161,9 @@ impl TcpContract {
             }
             SUBSCRIBE => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_type = socket_reader.read_byte().await?;
 
                 let queue_type = TopicQueueType::from_u8(queue_type);
@@ -145,9 +178,9 @@ impl TcpContract {
             }
             SUBSCRIBE_RESPONSE => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let result = TcpContract::SubscribeResponse { topic_id, queue_id };
 
                 Ok(result)
@@ -155,17 +188,21 @@ impl TcpContract {
 
             NEW_MESSAGES => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let records_len = socket_reader.read_i32().await? as usize;
 
-                let mut messages: Vec<TcpContractMessage> = Vec::with_capacity(records_len);
-                let packet_version = attr.get_packet_version(packet_no);
+                let mut messages = Vec::with_capacity(records_len);
+                let version = attr.get(packet_no);
                 for _ in 0..records_len {
-                    let msg = TcpContractMessage::serialize(socket_reader, packet_version).await?;
+                    let msg = crate::tcp_serializers::messages_to_deliver::deserialize(
+                        socket_reader,
+                        &version,
+                    )
+                    .await?;
                     messages.push(msg);
                 }
 
@@ -180,9 +217,9 @@ impl TcpContract {
             }
             ALL_MESSAGES_DELIVERED_CONFIRMATION => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let result = TcpContract::NewMessagesConfirmation {
@@ -195,7 +232,7 @@ impl TcpContract {
             }
             CREATE_TOPIC_IF_NOT_EXISTS => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
 
                 let result = TcpContract::CreateTopicIfNotExists { topic_id };
 
@@ -204,7 +241,7 @@ impl TcpContract {
 
             REJECT => {
                 let message =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let result = TcpContract::Reject { message };
                 Ok(result)
             }
@@ -227,9 +264,9 @@ impl TcpContract {
 
             ALL_MESSAGES_NOT_DELIVERED_CONFIRMATION => {
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let result = TcpContract::AllMessagesConfirmedAsFail {
@@ -244,13 +281,14 @@ impl TcpContract {
             CONFIRM_SOME_MESSAGES_AS_OK => {
                 let packet_version = socket_reader.read_byte().await?;
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let delivered =
-                    super::common_deserializers::read_queue_with_intervals(socket_reader).await?;
+                    crate::tcp_serializers::queue_with_intervals::deserialize(socket_reader)
+                        .await?;
 
                 let result = TcpContract::ConfirmSomeMessagesAsOk {
                     packet_version,
@@ -266,13 +304,14 @@ impl TcpContract {
             INTERMEDIARY_CONFIRM => {
                 let packet_version = socket_reader.read_byte().await?;
                 let topic_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let queue_id =
-                    super::common_deserializers::read_pascal_string(socket_reader).await?;
+                    crate::tcp_serializers::pascal_string::deserialize(socket_reader).await?;
                 let confirmation_id = socket_reader.read_i64().await?;
 
                 let delivered =
-                    super::common_deserializers::read_queue_with_intervals(socket_reader).await?;
+                    crate::tcp_serializers::queue_with_intervals::deserialize(socket_reader)
+                        .await?;
 
                 let result = TcpContract::IntermediaryConfirm {
                     packet_version,
@@ -291,23 +330,27 @@ impl TcpContract {
         return result;
     }
 
-    pub fn serialize(self) -> Vec<u8> {
-        let mut result: Vec<u8> = Vec::new();
-
+    pub fn serialize(self, protocol_version: i32) -> Vec<u8> {
         match self {
             TcpContract::Ping {} => {
+                let mut result: Vec<u8> = Vec::with_capacity(1);
                 result.push(PING);
+                result
             }
             TcpContract::Pong {} => {
+                let mut result: Vec<u8> = Vec::with_capacity(1);
                 result.push(PONG);
+                result
             }
             TcpContract::Greeting {
                 name,
                 protocol_version,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(GREETING);
-                serialize_pascal_string(&mut result, name.as_str());
-                serialize_i32(&mut result, protocol_version);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, name.as_str());
+                crate::tcp_serializers::i32::serialize(&mut result, protocol_version);
+                result
             }
             TcpContract::Publish {
                 topic_id,
@@ -315,35 +358,46 @@ impl TcpContract {
                 persist_immediately,
                 data_to_publish,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PUBLISH);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_i64(&mut result, request_id);
-                serialize_list_of_arrays(&mut result, &data_to_publish);
-                serialize_bool(&mut result, persist_immediately);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::i64::serialize(&mut result, request_id);
+                crate::tcp_serializers::messages_to_publish::serialize(
+                    &mut result,
+                    &data_to_publish,
+                    protocol_version,
+                );
+
+                crate::tcp_serializers::bool::serialize(&mut result, persist_immediately);
+                result
             }
 
             TcpContract::PublishResponse { request_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PUBLISH_RESPONSE);
-                serialize_i64(&mut result, request_id);
+                crate::tcp_serializers::i64::serialize(&mut result, request_id);
+                result
             }
             TcpContract::Subscribe {
                 topic_id,
                 queue_id,
                 queue_type,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(SUBSCRIBE);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
-                serialize_byte(&mut result, queue_type.into_u8());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                crate::tcp_serializers::byte::serialize(&mut result, queue_type.into_u8());
+                result
             }
             TcpContract::SubscribeResponse { topic_id, queue_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(SUBSCRIBE_RESPONSE);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                result
             }
-            TcpContract::NewMessagesServerSide(payload) => {
-                return payload;
-            }
+            TcpContract::Raw(payload) => payload,
             TcpContract::NewMessages {
                 topic_id: _,
                 queue_id: _,
@@ -359,14 +413,18 @@ impl TcpContract {
                 queue_id,
                 confirmation_id,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(ALL_MESSAGES_DELIVERED_CONFIRMATION);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
-                serialize_i64(&mut result, confirmation_id);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                crate::tcp_serializers::i64::serialize(&mut result, confirmation_id);
+                result
             }
             TcpContract::CreateTopicIfNotExists { topic_id } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(CREATE_TOPIC_IF_NOT_EXISTS);
-                serialize_pascal_string(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                result
             }
             TcpContract::IntermediaryConfirm {
                 packet_version,
@@ -375,38 +433,46 @@ impl TcpContract {
                 confirmation_id,
                 delivered,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(INTERMEDIARY_CONFIRM);
                 result.push(packet_version);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
-                serialize_i64(&mut result, confirmation_id);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                crate::tcp_serializers::i64::serialize(&mut result, confirmation_id);
 
-                super::common_serializers::serialize_queue_with_intervals(&mut result, &delivered);
+                crate::tcp_serializers::queue_with_intervals::serialize(&mut result, &delivered);
+                result
             }
             TcpContract::PacketVersions { packet_versions } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(PACKET_VERSIONS);
 
                 let data_len = packet_versions.len() as u8;
-                serialize_byte(&mut result, data_len);
+                crate::tcp_serializers::byte::serialize(&mut result, data_len);
 
                 for kv in packet_versions {
-                    serialize_byte(&mut result, kv.0);
-                    serialize_i32(&mut result, kv.1);
+                    crate::tcp_serializers::byte::serialize(&mut result, kv.0);
+                    crate::tcp_serializers::i32::serialize(&mut result, kv.1);
                 }
+                result
             }
             TcpContract::Reject { message } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(REJECT);
-                serialize_pascal_string(&mut result, message.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, message.as_str());
+                result
             }
             TcpContract::AllMessagesConfirmedAsFail {
                 topic_id,
                 queue_id,
                 confirmation_id,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(ALL_MESSAGES_NOT_DELIVERED_CONFIRMATION);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
-                serialize_i64(&mut result, confirmation_id);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                crate::tcp_serializers::i64::serialize(&mut result, confirmation_id);
+                result
             }
 
             TcpContract::ConfirmSomeMessagesAsOk {
@@ -416,24 +482,32 @@ impl TcpContract {
                 confirmation_id,
                 delivered,
             } => {
+                let mut result: Vec<u8> = Vec::new();
                 result.push(CONFIRM_SOME_MESSAGES_AS_OK);
                 result.push(packet_version);
-                serialize_pascal_string(&mut result, topic_id.as_str());
-                serialize_pascal_string(&mut result, queue_id.as_str());
-                serialize_i64(&mut result, confirmation_id);
-
-                super::common_serializers::serialize_queue_with_intervals(&mut result, &delivered);
+                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
+                crate::tcp_serializers::pascal_string::serialize(&mut result, queue_id.as_str());
+                crate::tcp_serializers::i64::serialize(&mut result, confirmation_id);
+                crate::tcp_serializers::queue_with_intervals::serialize(&mut result, &delivered);
+                result
             }
         }
-
-        return result;
     }
 }
 
+impl my_tcp_sockets::tcp_connection::TcpContract for TcpContract {
+    fn is_pong(&self) -> bool {
+        if let TcpContract::Pong = self {
+            return true;
+        }
+
+        false
+    }
+}
 #[cfg(test)]
 mod tests {
 
-    use crate::test_utils::DataReaderMock;
+    use my_tcp_sockets::socket_reader::SocketReaderInMem;
 
     use super::*;
 
@@ -441,11 +515,10 @@ mod tests {
     async fn test_ping_packet() {
         let tcp_packet = TcpContract::Ping;
 
-        let mut socket_reader = DataReaderMock::new();
-        let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(2);
 
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
+        let attr = ConnectionAttributes::new(0);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -463,11 +536,9 @@ mod tests {
     async fn test_pong_packet() {
         let tcp_packet = TcpContract::Pong;
 
-        let mut socket_reader = DataReaderMock::new();
-        let attr = ConnectionAttributes::new();
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
-
-        socket_reader.push(&serialized_data);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(2);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
+        let attr = ConnectionAttributes::new(0);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -484,20 +555,16 @@ mod tests {
     #[tokio::test]
     async fn test_greeting_packet() {
         let test_app_name = "testtttt";
-        let test_protocol_version = 255;
+        let test_protocol_version = 2;
 
         let tcp_packet = TcpContract::Greeting {
             name: test_app_name.to_string(),
             protocol_version: test_protocol_version,
         };
+        let serialized_data: Vec<u8> = tcp_packet.serialize(0);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
-        let mut socket_reader = DataReaderMock::new();
-
-        let attr = ConnectionAttributes::new();
-
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
-
-        socket_reader.push(&serialized_data);
+        let attr = ConnectionAttributes::new(0);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -518,9 +585,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_publish_packet() {
+    async fn test_publish_packet_v2() {
+        const PROTOCOL_VERSION: i32 = 2;
+
         let request_id_test = 1;
-        let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
+
+        let message_to_publish = MessageToPublishTcpContract {
+            content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            headers: None,
+        };
+
+        let data_test = vec![message_to_publish];
         let topic_test = String::from("test-topic");
         let persist_test = true;
 
@@ -530,14 +605,10 @@ mod tests {
             request_id: request_id_test,
             topic_id: topic_test,
         };
+        let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
 
-        let mut socket_reader = DataReaderMock::new();
-
-        let attr = ConnectionAttributes::new();
-
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
-
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -556,8 +627,8 @@ mod tests {
 
                 let data_test = vec![vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0]];
 
-                for index in 0..data_to_publish[0].len() {
-                    assert_eq!(data_test[0][index], data_to_publish[0][index]);
+                for index in 0..data_to_publish[0].content.len() {
+                    assert_eq!(data_test[0][index], data_to_publish[0].content[index]);
                 }
             }
             _ => {
@@ -567,20 +638,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_publish_packet_v3() {
+        const PROTOCOL_VERSION: i32 = 3;
+
+        let request_id_test = 1;
+
+        let mut headers = HashMap::new();
+        headers.insert("key1".to_string(), "value1".to_string());
+        headers.insert("key2".to_string(), "value2".to_string());
+
+        let message_to_publish = MessageToPublishTcpContract {
+            content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            headers: Some(headers),
+        };
+
+        let data_test = vec![message_to_publish];
+        let topic_test = String::from("test-topic");
+        let persist_test = true;
+
+        let tcp_packet = TcpContract::Publish {
+            data_to_publish: data_test,
+            persist_immediately: persist_test,
+            request_id: request_id_test,
+            topic_id: topic_test,
+        };
+
+        let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(attr.protocol_version);
+
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
+
+        let result = TcpContract::deserialize(&mut socket_reader, &attr)
+            .await
+            .unwrap();
+
+        match result {
+            TcpContract::Publish {
+                mut data_to_publish,
+                persist_immediately,
+                request_id,
+                topic_id,
+            } => {
+                assert_eq!(request_id_test, request_id);
+                assert_eq!(String::from("test-topic"), topic_id);
+                assert_eq!(persist_test, persist_immediately);
+
+                let data_test = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+
+                assert_eq!(1, data_to_publish.len());
+
+                let el0 = data_to_publish.remove(0);
+
+                let mut headers = el0.headers.unwrap();
+
+                assert_eq!(data_test, el0.content);
+                assert_eq!(2, headers.len());
+
+                assert_eq!("value1", headers.remove("key1").unwrap());
+                assert_eq!("value2", headers.remove("key2").unwrap());
+            }
+            _ => {
+                panic!("Invalid Packet Type");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_publish_response_packet() {
+        const PROTOCOL_VERSION: i32 = 2;
+
         let request_id_test = 1;
 
         let tcp_packet = TcpContract::PublishResponse {
             request_id: request_id_test,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let mut attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        attr.protocol_version = PROTOCOL_VERSION;
 
-        let attr = ConnectionAttributes::new();
+        let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
-
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
@@ -598,6 +736,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_packet() {
+        const PROTOCOL_VERSION: i32 = 2;
         let queue_id_test = String::from("queue");
         let topic_id_test = String::from("topic");
         let queue_type_test = TopicQueueType::PermanentWithSingleConnection;
@@ -608,13 +747,10 @@ mod tests {
             queue_type: queue_type_test,
         };
 
-        let mut socket_reader = DataReaderMock::new();
+        let attr = ConnectionAttributes::new(PROTOCOL_VERSION);
+        let serialized_data: Vec<u8> = tcp_packet.serialize(PROTOCOL_VERSION);
 
-        let attr = ConnectionAttributes::new();
-
-        let serialized_data: Vec<u8> = tcp_packet.serialize();
-
-        socket_reader.push(&serialized_data);
+        let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
         let result = TcpContract::deserialize(&mut socket_reader, &attr)
             .await
