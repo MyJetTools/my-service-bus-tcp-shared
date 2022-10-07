@@ -1,3 +1,4 @@
+use my_service_bus_abstractions::MessageToPublish;
 use my_service_bus_shared::{
     queue::TopicQueueType, queue_with_intervals::QueueIndexRange, MessageId,
 };
@@ -12,12 +13,6 @@ use std::collections::HashMap;
 pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
-
-#[derive(Debug, Clone)]
-pub struct MessageToPublishTcpContract {
-    pub headers: Option<HashMap<String, String>>,
-    pub content: Vec<u8>,
-}
 
 #[derive(Debug, Clone)]
 pub struct MessageToDeliverTcpContract {
@@ -39,7 +34,7 @@ pub enum TcpContract {
         topic_id: String,
         request_id: RequestId,
         persist_immediately: bool,
-        data_to_publish: Vec<MessageToPublishTcpContract>,
+        data_to_publish: Vec<MessageToPublish>,
     },
     PublishResponse {
         request_id: RequestId,
@@ -124,13 +119,12 @@ impl TcpContract {
 
                 let messages_count = socket_reader.read_i32().await? as usize;
 
-                let mut data_to_publish: Vec<MessageToPublishTcpContract> =
-                    Vec::with_capacity(messages_count);
+                let mut data_to_publish: Vec<MessageToPublish> = Vec::with_capacity(messages_count);
 
                 if attr.protocol_version < 3 {
                     for _ in 0..messages_count {
                         let content = socket_reader.read_byte_array().await?;
-                        data_to_publish.push(MessageToPublishTcpContract {
+                        data_to_publish.push(MessageToPublish {
                             headers: None,
                             content,
                         });
@@ -141,7 +135,7 @@ impl TcpContract {
                             crate::tcp_serializers::message_headers::deserialize(socket_reader)
                                 .await?;
                         let content = socket_reader.read_byte_array().await?;
-                        data_to_publish.push(MessageToPublishTcpContract { headers, content });
+                        data_to_publish.push(MessageToPublish { headers, content });
                     }
                 }
 
@@ -590,7 +584,7 @@ mod tests {
 
         let request_id_test = 1;
 
-        let message_to_publish = MessageToPublishTcpContract {
+        let message_to_publish = MessageToPublish {
             content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             headers: None,
         };
@@ -647,7 +641,7 @@ mod tests {
         headers.insert("key1".to_string(), "value1".to_string());
         headers.insert("key2".to_string(), "value2".to_string());
 
-        let message_to_publish = MessageToPublishTcpContract {
+        let message_to_publish = MessageToPublish {
             content: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             headers: Some(headers),
         };

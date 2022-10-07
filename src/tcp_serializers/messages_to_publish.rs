@@ -1,6 +1,6 @@
-use crate::MessageToPublishTcpContract;
+use my_service_bus_abstractions::MessageToPublish;
 
-pub fn serialize(data: &mut Vec<u8>, v: &Vec<MessageToPublishTcpContract>, protocol_version: i32) {
+pub fn serialize(data: &mut Vec<u8>, v: &Vec<MessageToPublish>, protocol_version: i32) {
     if protocol_version < 3 {
         serialize_v2(data, v)
     } else {
@@ -8,7 +8,7 @@ pub fn serialize(data: &mut Vec<u8>, v: &Vec<MessageToPublishTcpContract>, proto
     }
 }
 
-pub fn serialize_v2(data: &mut Vec<u8>, v: &Vec<MessageToPublishTcpContract>) {
+pub fn serialize_v2(data: &mut Vec<u8>, v: &Vec<MessageToPublish>) {
     let array_len = v.len() as i32;
     super::i32::serialize(data, array_len);
 
@@ -17,7 +17,7 @@ pub fn serialize_v2(data: &mut Vec<u8>, v: &Vec<MessageToPublishTcpContract>) {
     }
 }
 
-pub fn serialize_v3(data: &mut Vec<u8>, v: &Vec<MessageToPublishTcpContract>) {
+pub fn serialize_v3(data: &mut Vec<u8>, v: &Vec<MessageToPublish>) {
     let array_len = v.len() as i32;
     super::i32::serialize(data, array_len);
 
