@@ -1,5 +1,7 @@
-use my_service_bus_abstractions::{publisher::MessageToPublish, subscriber::MySbMessageToDeliver};
-use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
+use my_service_bus_abstractions::{
+    publisher::MessageToPublish, queue_with_intervals::QueueIndexRange, subscriber::TopicQueueType,
+    MySbMessage,
+};
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::ConnectionAttributes;
@@ -43,7 +45,7 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
         confirmation_id: i64,
-        messages: Vec<MySbMessageToDeliver>,
+        messages: Vec<MySbMessage>,
     },
     NewMessagesConfirmation {
         topic_id: String,

@@ -32,8 +32,7 @@ mod tests {
 
     use std::collections::HashMap;
 
-    use my_service_bus_shared::MySbMessageContent;
-    use rust_extensions::date_time::DateTimeAsMicroseconds;
+    use my_service_bus_abstractions::MySbMessage;
 
     use super::*;
     use crate::{PacketProtVer, TcpContract};
@@ -51,13 +50,19 @@ mod tests {
         headers.insert("1".to_string(), "1".to_string());
         headers.insert("2".to_string(), "2".to_string());
 
-        let msg1 = MySbMessageContent::new(
-            1,
-            vec![1, 1, 1],
-            Some(headers),
-            DateTimeAsMicroseconds::now(),
-        );
-        let msg2 = MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now());
+        let msg1 = MySbMessage {
+            id: 1,
+            attempt_no: 0,
+            content: vec![1, 1, 1],
+            headers: Some(headers),
+        };
+
+        let msg2 = MySbMessage {
+            id: 2,
+            attempt_no: 0,
+            content: vec![2, 2, 2],
+            headers: None,
+        };
 
         let mut payload = Vec::new();
 
@@ -113,13 +118,19 @@ mod tests {
         headers.insert("1".to_string(), "1".to_string());
         headers.insert("2".to_string(), "2".to_string());
 
-        let msg1 = MySbMessageContent::new(
-            1,
-            vec![1, 1, 1],
-            Some(headers),
-            DateTimeAsMicroseconds::now(),
-        );
-        let msg2 = MySbMessageContent::new(2, vec![2, 2, 2], None, DateTimeAsMicroseconds::now());
+        let msg1 = MySbMessage {
+            id: 1,
+            attempt_no: 0,
+            content: vec![1, 1, 1],
+            headers: Some(headers),
+        };
+
+        let msg2 = MySbMessage {
+            id: 2,
+            attempt_no: 0,
+            content: vec![2, 2, 2],
+            headers: None,
+        };
 
         let mut payload = Vec::new();
 

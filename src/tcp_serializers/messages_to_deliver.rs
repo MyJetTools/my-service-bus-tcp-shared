@@ -1,15 +1,9 @@
-use my_service_bus_abstractions::subscriber::MySbMessageToDeliver;
-use my_service_bus_shared::MySbMessageContent;
+use my_service_bus_abstractions::MySbMessage;
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::PacketProtVer;
 
-pub fn serialize(
-    dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
-    attempt_no: i32,
-    version: &PacketProtVer,
-) {
+pub fn serialize(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, version: &PacketProtVer) {
     if version.protocol_version < 3 {
         serialize_v2(dest, msg, attempt_no, version.packet_version);
     } else {
@@ -17,12 +11,7 @@ pub fn serialize(
     }
 }
 
-pub fn serialize_v2(
-    dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
-    attempt_no: i32,
-    packet_version: i32,
-) {
+pub fn serialize_v2(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, packet_version: i32) {
     crate::tcp_serializers::i64::serialize(dest, msg.id);
 
     if packet_version == 1 {
@@ -31,7 +20,7 @@ pub fn serialize_v2(
     super::byte_array::serialize(dest, msg.content.as_slice());
 }
 
-pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i32) {
+pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32) {
     crate::tcp_serializers::i64::serialize(dest, msg.id);
     crate::tcp_serializers::i32::serialize(dest, attempt_no);
     super::message_headers::serialize(dest, msg.headers.as_ref());
@@ -41,7 +30,7 @@ pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i3
 pub async fn deserialize<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
     version: &PacketProtVer,
-) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
+) -> Result<MySbMessage, ReadingTcpContractFail> {
     if version.protocol_version < 3 {
         return deserialize_v2(socket_reader, version.packet_version).await;
     }
@@ -52,7 +41,7 @@ pub async fn deserialize<TSocketReader: SocketReader>(
 pub async fn deserialize_v2<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
     packet_version: i32,
-) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
+) -> Result<MySbMessage, ReadingTcpContractFail> {
     let id = socket_reader.read_i64().await?;
 
     let attempt_no = if packet_version == 1 {
@@ -63,7 +52,7 @@ pub async fn deserialize_v2<TSocketReader: SocketReader>(
 
     let content = socket_reader.read_byte_array().await?;
 
-    let result = MySbMessageToDeliver {
+    let result = MySbMessage {
         id,
         headers: None,
         attempt_no,
@@ -75,7 +64,7 @@ pub async fn deserialize_v2<TSocketReader: SocketReader>(
 
 pub async fn deserialize_v3<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
-) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
+) -> Result<MySbMessage, ReadingTcpContractFail> {
     let id = socket_reader.read_i64().await?;
 
     let attempt_no = socket_reader.read_i32().await?;
@@ -84,7 +73,7 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
 
     let content = socket_reader.read_byte_array().await?;
 
-    let result = MySbMessageToDeliver {
+    let result = MySbMessage {
         id,
         headers,
         attempt_no,
@@ -98,9 +87,8 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
 mod test {
     use std::collections::HashMap;
 
-    use my_service_bus_shared::MySbMessageContent;
+    use my_service_bus_abstractions::MySbMessage;
     use my_tcp_sockets::socket_reader::SocketReaderInMem;
-    use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use crate::PacketProtVer;
 
@@ -114,9 +102,9 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessageContent {
+        let src_msg = MySbMessage {
             id: 1,
-            time: DateTimeAsMicroseconds::now(),
+            attempt_no: 0,
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
         };
@@ -146,9 +134,9 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessageContent {
+        let src_msg = MySbMessage {
             id: 1,
-            time: DateTimeAsMicroseconds::now(),
+            attempt_no: 0,
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
         };
