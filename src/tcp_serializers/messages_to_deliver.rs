@@ -1,7 +1,8 @@
+use my_service_bus_abstractions::subscriber::MySbMessageToDeliver;
 use my_service_bus_shared::MySbMessageContent;
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
-use crate::{MessageToDeliverTcpContract, PacketProtVer};
+use crate::PacketProtVer;
 
 pub fn serialize(
     dest: &mut Vec<u8>,
@@ -40,7 +41,7 @@ pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i3
 pub async fn deserialize<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
     version: &PacketProtVer,
-) -> Result<MessageToDeliverTcpContract, ReadingTcpContractFail> {
+) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
     if version.protocol_version < 3 {
         return deserialize_v2(socket_reader, version.packet_version).await;
     }
@@ -51,7 +52,7 @@ pub async fn deserialize<TSocketReader: SocketReader>(
 pub async fn deserialize_v2<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
     packet_version: i32,
-) -> Result<MessageToDeliverTcpContract, ReadingTcpContractFail> {
+) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
     let id = socket_reader.read_i64().await?;
 
     let attempt_no = if packet_version == 1 {
@@ -62,7 +63,7 @@ pub async fn deserialize_v2<TSocketReader: SocketReader>(
 
     let content = socket_reader.read_byte_array().await?;
 
-    let result = MessageToDeliverTcpContract {
+    let result = MySbMessageToDeliver {
         id,
         headers: None,
         attempt_no,
@@ -74,7 +75,7 @@ pub async fn deserialize_v2<TSocketReader: SocketReader>(
 
 pub async fn deserialize_v3<TSocketReader: SocketReader>(
     socket_reader: &mut TSocketReader,
-) -> Result<MessageToDeliverTcpContract, ReadingTcpContractFail> {
+) -> Result<MySbMessageToDeliver, ReadingTcpContractFail> {
     let id = socket_reader.read_i64().await?;
 
     let attempt_no = socket_reader.read_i32().await?;
@@ -83,7 +84,7 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
 
     let content = socket_reader.read_byte_array().await?;
 
-    let result = MessageToDeliverTcpContract {
+    let result = MySbMessageToDeliver {
         id,
         headers,
         attempt_no,

@@ -12,5 +12,5 @@ mod tcp_serializer;
 pub use connection_attrs::{ConnectionAttributes, PacketProtVer};
 
 pub use packet_versions::PacketVersions;
-pub use tcp_contracts::{MessageToDeliverTcpContract, TcpContract};
+pub use tcp_contracts::TcpContract;
 pub use tcp_serializer::MySbTcpSerializer;

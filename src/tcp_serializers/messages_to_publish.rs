@@ -1,4 +1,4 @@
-use my_service_bus_abstractions::MessageToPublish;
+use my_service_bus_abstractions::publisher::MessageToPublish;
 
 pub fn serialize(data: &mut Vec<u8>, v: &Vec<MessageToPublish>, protocol_version: i32) {
     if protocol_version < 3 {

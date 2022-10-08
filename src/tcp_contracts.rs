@@ -1,7 +1,5 @@
-use my_service_bus_abstractions::MessageToPublish;
-use my_service_bus_shared::{
-    queue::TopicQueueType, queue_with_intervals::QueueIndexRange, MessageId,
-};
+use my_service_bus_abstractions::{publisher::MessageToPublish, subscriber::MySbMessageToDeliver};
+use my_service_bus_shared::{queue::TopicQueueType, queue_with_intervals::QueueIndexRange};
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::ConnectionAttributes;
@@ -13,14 +11,6 @@ use std::collections::HashMap;
 pub type RequestId = i64;
 
 pub type ConfirmationId = i64;
-
-#[derive(Debug, Clone)]
-pub struct MessageToDeliverTcpContract {
-    pub id: MessageId,
-    pub attempt_no: i32,
-    pub headers: Option<HashMap<String, String>>,
-    pub content: Vec<u8>,
-}
 
 #[derive(Debug, Clone)]
 pub enum TcpContract {
@@ -53,7 +43,7 @@ pub enum TcpContract {
         topic_id: String,
         queue_id: String,
         confirmation_id: i64,
-        messages: Vec<MessageToDeliverTcpContract>,
+        messages: Vec<MySbMessageToDeliver>,
     },
     NewMessagesConfirmation {
         topic_id: String,
