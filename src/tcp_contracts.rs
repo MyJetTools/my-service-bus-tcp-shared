@@ -343,20 +343,13 @@ impl TcpContract {
                 request_id,
                 persist_immediately,
                 data_to_publish,
-            } => {
-                let mut result: Vec<u8> = Vec::new();
-                result.push(PUBLISH);
-                crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id.as_str());
-                crate::tcp_serializers::i64::serialize(&mut result, request_id);
-                crate::tcp_serializers::messages_to_publish::serialize(
-                    &mut result,
-                    &data_to_publish,
-                    protocol_version,
-                );
-
-                crate::tcp_serializers::bool::serialize(&mut result, persist_immediately);
-                result
-            }
+            } => Self::compile_publish_payload(
+                topic_id.as_str(),
+                request_id,
+                data_to_publish.as_slice(),
+                persist_immediately,
+                protocol_version,
+            ),
 
             TcpContract::PublishResponse { request_id } => {
                 let mut result: Vec<u8> = Vec::new();
@@ -478,6 +471,27 @@ impl TcpContract {
                 result
             }
         }
+    }
+
+    pub fn compile_publish_payload(
+        topic_id: &str,
+        request_id: i64,
+        data_to_publish: &[MessageToPublish],
+        persist_immediately: bool,
+        protocol_version: i32,
+    ) -> Vec<u8> {
+        let mut result: Vec<u8> = Vec::new();
+        result.push(PUBLISH);
+        crate::tcp_serializers::pascal_string::serialize(&mut result, topic_id);
+        crate::tcp_serializers::i64::serialize(&mut result, request_id);
+        crate::tcp_serializers::messages_to_publish::serialize(
+            &mut result,
+            &data_to_publish,
+            protocol_version,
+        );
+
+        crate::tcp_serializers::bool::serialize(&mut result, persist_immediately);
+        result
     }
 }
 
