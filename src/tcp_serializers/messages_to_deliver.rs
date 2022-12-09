@@ -1,9 +1,15 @@
 use my_service_bus_abstractions::MySbMessage;
+use my_service_bus_shared::MySbMessageContent;
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::PacketProtVer;
 
-pub fn serialize(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, version: &PacketProtVer) {
+pub fn serialize(
+    dest: &mut Vec<u8>,
+    msg: &MySbMessageContent,
+    attempt_no: i32,
+    version: &PacketProtVer,
+) {
     if version.protocol_version < 3 {
         serialize_v2(dest, msg, attempt_no, version.packet_version);
     } else {
@@ -11,7 +17,12 @@ pub fn serialize(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, version
     }
 }
 
-pub fn serialize_v2(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, packet_version: i32) {
+pub fn serialize_v2(
+    dest: &mut Vec<u8>,
+    msg: &MySbMessageContent,
+    attempt_no: i32,
+    packet_version: i32,
+) {
     crate::tcp_serializers::i64::serialize(dest, msg.id);
 
     if packet_version == 1 {
@@ -20,7 +31,7 @@ pub fn serialize_v2(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32, pack
     super::byte_array::serialize(dest, msg.content.as_slice());
 }
 
-pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessage, attempt_no: i32) {
+pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i32) {
     crate::tcp_serializers::i64::serialize(dest, msg.id);
     crate::tcp_serializers::i32::serialize(dest, attempt_no);
     super::message_headers::serialize(dest, msg.headers.as_ref());
@@ -87,8 +98,9 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
 mod test {
     use std::collections::HashMap;
 
-    use my_service_bus_abstractions::MySbMessage;
+    use my_service_bus_shared::MySbMessageContent;
     use my_tcp_sockets::socket_reader::SocketReaderInMem;
+    use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use crate::PacketProtVer;
 
@@ -102,9 +114,9 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessage {
+        let src_msg = MySbMessageContent {
             id: 1,
-            attempt_no: 0,
+            time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
         };
@@ -134,9 +146,9 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessage {
+        let src_msg = MySbMessageContent {
             id: 1,
-            attempt_no: 0,
+            time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
         };
