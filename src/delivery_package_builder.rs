@@ -1,30 +1,50 @@
-use crate::{tcp_message_id, tcp_serializers::*};
+use my_service_bus_shared::MySbMessageContent;
 
-pub fn init_delivery_package(
-    payload: &mut Vec<u8>,
-    topic_id: &str,
-    queue_id: &str,
-    subscriber_id: i64,
-) -> usize {
-    payload.push(tcp_message_id::NEW_MESSAGES);
-    pascal_string::serialize(payload, topic_id);
-    pascal_string::serialize(payload, queue_id);
-    i64::serialize(payload, subscriber_id);
+use crate::{tcp_message_id, tcp_serializers::*, PacketProtVer, TcpContract};
 
-    let amount_offset = payload.len();
-    i32::serialize(payload, 0);
-
-    amount_offset
+pub struct DeliverTcpPacketBuilder {
+    payload: Vec<u8>,
+    amount_offset: usize,
+    version: PacketProtVer,
+    amount: i32,
 }
 
-pub fn update_amount_of_messages(
-    payload: &mut Vec<u8>,
-    messages_count_position: usize,
-    amount: i32,
-) {
-    let size = amount.to_le_bytes();
-    let dest = &mut payload[messages_count_position..messages_count_position + 4];
-    dest.copy_from_slice(size.as_slice());
+impl DeliverTcpPacketBuilder {
+    pub fn new(topic_id: &str, queue_id: &str, subscriber_id: i64, version: PacketProtVer) -> Self {
+        let mut payload = Vec::new();
+        payload.push(tcp_message_id::NEW_MESSAGES);
+        pascal_string::serialize(&mut payload, topic_id);
+        pascal_string::serialize(&mut payload, queue_id);
+        i64::serialize(&mut payload, subscriber_id);
+
+        let amount_offset = payload.len();
+        i32::serialize(&mut payload, 0);
+
+        Self {
+            payload,
+            amount_offset,
+            version,
+            amount: 0,
+        }
+    }
+
+    pub fn append_packet(&mut self, msg: &MySbMessageContent, attempt_no: i32) {
+        crate::tcp_serializers::messages_to_deliver::serialize(
+            &mut self.payload,
+            msg,
+            attempt_no,
+            &self.version,
+        );
+
+        self.amount += 1;
+    }
+
+    pub fn get_result(mut self) -> TcpContract {
+        let size = self.amount.to_le_bytes();
+        let dest = &mut self.payload[self.amount_offset..self.amount_offset + 4];
+        dest.copy_from_slice(size.as_slice());
+        TcpContract::Raw(self.payload)
+    }
 }
 
 #[cfg(test)]
@@ -65,16 +85,13 @@ mod tests {
             headers: None,
         };
 
-        let mut payload = Vec::new();
+        let mut builder =
+            DeliverTcpPacketBuilder::new("test_topic", "test_queue", 15, version.clone());
 
-        let amount_position = init_delivery_package(&mut payload, "test_topic", "test_queue", 15);
+        builder.append_packet(&msg1, 1);
+        builder.append_packet(&msg2, 2);
 
-        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg1, 1, &version);
-        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg2, 2, &version);
-
-        update_amount_of_messages(&mut payload, amount_position, 2);
-
-        let tcp_contract = TcpContract::Raw(payload);
+        let tcp_contract = builder.get_result();
 
         let result = convert_from_raw(tcp_contract, &version).await;
 
@@ -133,16 +150,13 @@ mod tests {
             headers: None,
         };
 
-        let mut payload = Vec::new();
+        let mut builder =
+            DeliverTcpPacketBuilder::new("test_topic", "test_queue", 15, version.clone());
 
-        let amount_position = init_delivery_package(&mut payload, "test_topic", "test_queue", 15);
+        builder.append_packet(&msg1, 1);
+        builder.append_packet(&msg2, 2);
 
-        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg1, 1, &version);
-        crate::tcp_serializers::messages_to_deliver::serialize(&mut payload, &msg2, 2, &version);
-
-        update_amount_of_messages(&mut payload, amount_position, 2);
-
-        let tcp_contract = TcpContract::Raw(payload);
+        let tcp_contract = builder.get_result();
 
         let result = convert_from_raw(tcp_contract, &version).await;
 
