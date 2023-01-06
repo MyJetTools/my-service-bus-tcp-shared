@@ -22,6 +22,8 @@ impl MySbTcpSerializer {
 
 #[async_trait]
 impl TcpSocketSerializer<TcpContract> for MySbTcpSerializer {
+    const PING_PACKET_IS_SINGLETONE: bool = true;
+
     fn serialize(&self, contract: TcpContract) -> Vec<u8> {
         contract.serialize(self.attr.protocol_version)
     }
