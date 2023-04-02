@@ -23,7 +23,7 @@ pub fn serialize_v2(
     attempt_no: i32,
     packet_version: i32,
 ) {
-    crate::tcp_serializers::i64::serialize(dest, msg.id);
+    crate::tcp_serializers::i64::serialize(dest, msg.id.get_value());
 
     if packet_version == 1 {
         crate::tcp_serializers::i32::serialize(dest, attempt_no);
@@ -32,7 +32,7 @@ pub fn serialize_v2(
 }
 
 pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i32) {
-    crate::tcp_serializers::i64::serialize(dest, msg.id);
+    crate::tcp_serializers::i64::serialize(dest, msg.id.get_value());
     crate::tcp_serializers::i32::serialize(dest, attempt_no);
     super::message_headers::serialize(dest, msg.headers.as_ref());
     super::byte_array::serialize(dest, msg.content.as_slice());
@@ -64,7 +64,7 @@ pub async fn deserialize_v2<TSocketReader: SocketReader>(
     let content = socket_reader.read_byte_array().await?;
 
     let result = MySbMessage {
-        id,
+        id: id.into(),
         headers: None,
         attempt_no,
         content,
@@ -85,7 +85,7 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
     let content = socket_reader.read_byte_array().await?;
 
     let result = MySbMessage {
-        id,
+        id: id.into(),
         headers,
         attempt_no,
         content,
@@ -115,7 +115,7 @@ mod test {
         headers.insert("key1".to_string(), "value1".to_string());
 
         let src_msg = MySbMessageContent {
-            id: 1,
+            id: 1.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
@@ -147,7 +147,7 @@ mod test {
         headers.insert("key1".to_string(), "value1".to_string());
 
         let src_msg = MySbMessageContent {
-            id: 1,
+            id: 1.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),

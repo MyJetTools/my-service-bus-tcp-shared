@@ -59,7 +59,7 @@ mod tests {
     use crate::{PacketProtVer, TcpContract};
 
     #[tokio::test]
-    async fn test_basic_usecase_v2() {
+    async fn test_basic_use_case_v2() {
         const PROTOCOL_VERSION: i32 = 2;
 
         let version = PacketProtVer {
@@ -72,14 +72,14 @@ mod tests {
         headers.insert("2".to_string(), "2".to_string());
 
         let msg1 = MySbMessageContent {
-            id: 1,
+            id: 1.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![1, 1, 1],
             headers: Some(headers),
         };
 
         let msg2 = MySbMessageContent {
-            id: 2,
+            id: 2.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![2, 2, 2],
             headers: None,
@@ -124,7 +124,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_basic_usecase_v3() {
+    async fn test_basic_use_case_v3() {
         const PROTOCOL_VERSION: i32 = 3;
 
         let version = PacketProtVer {
@@ -137,14 +137,14 @@ mod tests {
         headers.insert("2".to_string(), "2".to_string());
 
         let msg1 = MySbMessageContent {
-            id: 1,
+            id: 1.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![1, 1, 1],
             headers: Some(headers),
         };
 
         let msg2 = MySbMessageContent {
-            id: 2,
+            id: 2.into(),
             time: DateTimeAsMicroseconds::now(),
             content: vec![2, 2, 2],
             headers: None,
