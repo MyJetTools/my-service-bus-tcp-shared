@@ -4,36 +4,26 @@ use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::PacketProtVer;
 
-pub fn serialize(
-    dest: &mut Vec<u8>,
-    msg: &impl MyServiceBusMessage,
-    attempt_no: i32,
-    version: &PacketProtVer,
-) {
+pub fn serialize(dest: &mut Vec<u8>, msg: &impl MyServiceBusMessage, version: &PacketProtVer) {
     if version.protocol_version < 3 {
-        serialize_v2(dest, msg, attempt_no, version.packet_version);
+        serialize_v2(dest, msg, version.packet_version);
     } else {
-        serialize_v3(dest, msg, attempt_no);
+        serialize_v3(dest, msg);
     }
 }
 
-pub fn serialize_v2(
-    dest: &mut Vec<u8>,
-    msg: &impl MyServiceBusMessage,
-    attempt_no: i32,
-    packet_version: i32,
-) {
+pub fn serialize_v2(dest: &mut Vec<u8>, msg: &impl MyServiceBusMessage, packet_version: i32) {
     crate::tcp_serializers::i64::serialize(dest, msg.get_id().get_value());
 
     if packet_version == 1 {
-        crate::tcp_serializers::i32::serialize(dest, attempt_no);
+        crate::tcp_serializers::i32::serialize(dest, msg.get_attempt_no());
     }
     super::byte_array::serialize(dest, msg.get_content());
 }
 
-pub fn serialize_v3(dest: &mut Vec<u8>, msg: &impl MyServiceBusMessage, attempt_no: i32) {
+pub fn serialize_v3(dest: &mut Vec<u8>, msg: &impl MyServiceBusMessage) {
     crate::tcp_serializers::i64::serialize(dest, msg.get_id().get_value());
-    crate::tcp_serializers::i32::serialize(dest, attempt_no);
+    crate::tcp_serializers::i32::serialize(dest, msg.get_attempt_no());
     super::message_headers::serialize(dest, msg.get_headers());
     super::byte_array::serialize(dest, msg.get_content());
 }
@@ -122,7 +112,7 @@ mod test {
 
         let mut serialized_data = Vec::new();
 
-        super::serialize(&mut serialized_data, &src_msg, 1, &version);
+        super::serialize(&mut serialized_data, &src_msg, &version);
 
         let mut socket_reader = SocketReaderInMem::new(serialized_data);
 
@@ -154,7 +144,7 @@ mod test {
 
         let mut serialized_data = Vec::new();
 
-        super::serialize(&mut serialized_data, &src_msg, 1, &version);
+        super::serialize(&mut serialized_data, &src_msg, &version);
 
         let mut socket_reader = SocketReaderInMem::new(serialized_data);
 

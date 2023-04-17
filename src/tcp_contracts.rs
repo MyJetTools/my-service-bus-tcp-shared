@@ -554,7 +554,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_greeting_packet() {
-        let test_app_name = "testtttt";
+        let test_app_name = "test_app";
         let test_protocol_version = 2;
 
         let tcp_packet = TcpContract::Greeting {

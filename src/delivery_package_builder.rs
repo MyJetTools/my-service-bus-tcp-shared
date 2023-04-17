@@ -28,11 +28,10 @@ impl DeliverTcpPacketBuilder {
         }
     }
 
-    pub fn append_packet(&mut self, msg: &impl MyServiceBusMessage, attempt_no: i32) {
+    pub fn append_packet(&mut self, msg: &impl MyServiceBusMessage) {
         crate::tcp_serializers::messages_to_deliver::serialize(
             &mut self.payload,
             msg,
-            attempt_no,
             &self.version,
         );
 
@@ -81,14 +80,14 @@ mod tests {
             id: 2.into(),
             content: vec![2, 2, 2],
             headers: None,
-            attempt_no: 1,
+            attempt_no: 2,
         };
 
         let mut builder =
             DeliverTcpPacketBuilder::new("test_topic", "test_queue", 15, version.clone());
 
-        builder.append_packet(&msg1, 1);
-        builder.append_packet(&msg2, 2);
+        builder.append_packet(&msg1);
+        builder.append_packet(&msg2);
 
         let tcp_contract = builder.get_result();
 
@@ -146,14 +145,14 @@ mod tests {
             id: 2.into(),
             content: vec![2, 2, 2],
             headers: None,
-            attempt_no: 1,
+            attempt_no: 2,
         };
 
         let mut builder =
             DeliverTcpPacketBuilder::new("test_topic", "test_queue", 15, version.clone());
 
-        builder.append_packet(&msg1, 1);
-        builder.append_packet(&msg2, 2);
+        builder.append_packet(&msg1);
+        builder.append_packet(&msg2);
 
         let tcp_contract = builder.get_result();
 
