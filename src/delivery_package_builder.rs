@@ -1,4 +1,4 @@
-use my_service_bus_shared::MySbMessageContent;
+use my_service_bus_abstractions::MyServiceBusMessage;
 
 use crate::{tcp_message_id, tcp_serializers::*, PacketProtVer, TcpContract};
 
@@ -28,7 +28,7 @@ impl DeliverTcpPacketBuilder {
         }
     }
 
-    pub fn append_packet(&mut self, msg: &MySbMessageContent, attempt_no: i32) {
+    pub fn append_packet(&mut self, msg: &impl MyServiceBusMessage, attempt_no: i32) {
         crate::tcp_serializers::messages_to_deliver::serialize(
             &mut self.payload,
             msg,
@@ -52,8 +52,7 @@ mod tests {
 
     use std::collections::HashMap;
 
-    use my_service_bus_shared::MySbMessageContent;
-    use rust_extensions::date_time::DateTimeAsMicroseconds;
+    use my_service_bus_abstractions::MySbMessage;
 
     use super::*;
     use crate::{PacketProtVer, TcpContract};
@@ -71,18 +70,18 @@ mod tests {
         headers.insert("1".to_string(), "1".to_string());
         headers.insert("2".to_string(), "2".to_string());
 
-        let msg1 = MySbMessageContent {
+        let msg1 = MySbMessage {
             id: 1.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![1, 1, 1],
             headers: Some(headers),
+            attempt_no: 1,
         };
 
-        let msg2 = MySbMessageContent {
+        let msg2 = MySbMessage {
             id: 2.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![2, 2, 2],
             headers: None,
+            attempt_no: 1,
         };
 
         let mut builder =
@@ -136,18 +135,18 @@ mod tests {
         headers.insert("1".to_string(), "1".to_string());
         headers.insert("2".to_string(), "2".to_string());
 
-        let msg1 = MySbMessageContent {
+        let msg1 = MySbMessage {
             id: 1.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![1, 1, 1],
             headers: Some(headers),
+            attempt_no: 1,
         };
 
-        let msg2 = MySbMessageContent {
+        let msg2 = MySbMessage {
             id: 2.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![2, 2, 2],
             headers: None,
+            attempt_no: 1,
         };
 
         let mut builder =

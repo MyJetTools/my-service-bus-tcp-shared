@@ -384,7 +384,7 @@ impl TcpContract {
                 messages: _,
             } => {
                 panic!(
-                    "This packet is not used by server. Server uses optimized veriosn of the packet"
+                    "This packet is not used by server. Server uses optimized version of the packet"
                 );
             }
             TcpContract::NewMessagesConfirmation {

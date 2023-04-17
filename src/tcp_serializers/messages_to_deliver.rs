@@ -1,12 +1,12 @@
-use my_service_bus_abstractions::MySbMessage;
-use my_service_bus_shared::MySbMessageContent;
+use my_service_bus_abstractions::{MySbMessage, MyServiceBusMessage};
+
 use my_tcp_sockets::socket_reader::{ReadingTcpContractFail, SocketReader};
 
 use crate::PacketProtVer;
 
 pub fn serialize(
     dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
+    msg: &impl MyServiceBusMessage,
     attempt_no: i32,
     version: &PacketProtVer,
 ) {
@@ -19,23 +19,23 @@ pub fn serialize(
 
 pub fn serialize_v2(
     dest: &mut Vec<u8>,
-    msg: &MySbMessageContent,
+    msg: &impl MyServiceBusMessage,
     attempt_no: i32,
     packet_version: i32,
 ) {
-    crate::tcp_serializers::i64::serialize(dest, msg.id.get_value());
+    crate::tcp_serializers::i64::serialize(dest, msg.get_id().get_value());
 
     if packet_version == 1 {
         crate::tcp_serializers::i32::serialize(dest, attempt_no);
     }
-    super::byte_array::serialize(dest, msg.content.as_slice());
+    super::byte_array::serialize(dest, msg.get_content());
 }
 
-pub fn serialize_v3(dest: &mut Vec<u8>, msg: &MySbMessageContent, attempt_no: i32) {
-    crate::tcp_serializers::i64::serialize(dest, msg.id.get_value());
+pub fn serialize_v3(dest: &mut Vec<u8>, msg: &impl MyServiceBusMessage, attempt_no: i32) {
+    crate::tcp_serializers::i64::serialize(dest, msg.get_id().get_value());
     crate::tcp_serializers::i32::serialize(dest, attempt_no);
-    super::message_headers::serialize(dest, msg.headers.as_ref());
-    super::byte_array::serialize(dest, msg.content.as_slice());
+    super::message_headers::serialize(dest, msg.get_headers());
+    super::byte_array::serialize(dest, msg.get_content());
 }
 
 pub async fn deserialize<TSocketReader: SocketReader>(
@@ -98,9 +98,8 @@ pub async fn deserialize_v3<TSocketReader: SocketReader>(
 mod test {
     use std::collections::HashMap;
 
-    use my_service_bus_shared::MySbMessageContent;
+    use my_service_bus_abstractions::MySbMessage;
     use my_tcp_sockets::socket_reader::SocketReaderInMem;
-    use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use crate::PacketProtVer;
 
@@ -114,11 +113,11 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessageContent {
+        let src_msg = MySbMessage {
             id: 1.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
+            attempt_no: 1,
         };
 
         let mut serialized_data = Vec::new();
@@ -146,11 +145,11 @@ mod test {
         let mut headers = HashMap::new();
         headers.insert("key1".to_string(), "value1".to_string());
 
-        let src_msg = MySbMessageContent {
+        let src_msg = MySbMessage {
             id: 1.into(),
-            time: DateTimeAsMicroseconds::now(),
             content: vec![0u8, 1u8, 2u8],
             headers: Some(headers),
+            attempt_no: 1,
         };
 
         let mut serialized_data = Vec::new();
